@@ -28,7 +28,12 @@ Phaser 3.90 für die Kampfszene (per `import('./game')` nachgeladen, eigener ~1,
 | `npm run icons` | PNG-Icons in `public/` neu erzeugen |
 | `npm run simulate` | Balancing-Simulation (`--days=180 --seeds=7 --markdown`), Ergebnis → BALANCING.md |
 | `node scripts/fetch-lpc.mjs` | LPC-Ebenen + Definitionen nachladen (nur fehlende Dateien; neue Downloads vorher mit dem Nutzer absprechen) |
-| Deploy | Push auf `main` → GitHub Actions (`.github/workflows/deploy.yml`) → GitHub Pages. `BASE_PATH=/<repo>/` wird im Workflow gesetzt. |
+| Deploy | Push auf `main` → GitHub Actions (`.github/workflows/deploy.yml`, Tests + Build) → GitHub Pages. `BASE_PATH=/<repo>/` wird im Workflow gesetzt. |
+
+**Live:** https://kevinlleshi94-eng.github.io/alltagsheld/ · Repo (öffentlich): https://github.com/kevinlleshi94-eng/alltagsheld
+GitHub CLI: `C:\Program Files\GitHub CLI\gh.exe` (angemeldet als kevinlleshi94-eng). Git-Anmeldung nur in diesem Repo über `gh auth git-credential`
+(lokale `.git/config`), Autor = GitHub-noreply-Adresse. Pushen nur nach Freigabe durch den Nutzer.
+Daten (IndexedDB) hängen an der Adresse: Dev-Server (192.168.178.23:5173) und GitHub Pages haben getrennte Spielstände → Umzug per Backup-Export/-Import.
 
 ## Projektstruktur
 ```
