@@ -1,0 +1,11 @@
+node_modules
+dist
+dev-dist
+*.local
+.DS_Store
+coverage
+
+# extracted copies of the downloaded archives in assets-src/oga/*/ (the zips are kept)
+assets-src/oga/*/x/
+# personal Claude Code settings
+.claude/settings.local.json
