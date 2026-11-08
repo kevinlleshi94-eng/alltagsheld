@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BALANCE } from './balance';
-import { median, simulate } from './simulation';
+import { median, simulate, simulateDetailed } from './simulation';
 
 // Coarse guard rails for the tuned values in balance.ts (see BALANCING.md).
 // Deliberately loose – they only catch accidental, large balance regressions.
@@ -32,6 +32,7 @@ describe('balancing simulation', () => {
         fulfillment: 0.6,
         missedPerDay: 5,
         habitMinusPerDay: 2,
+        profile: 'seed',
         days: 180,
         seed: 2000 + s,
         balance: BALANCE,
@@ -42,6 +43,21 @@ describe('balancing simulation', () => {
     expect(deaths).toBeGreaterThanOrEqual(4);
     expect(deaths).toBeLessThanOrEqual(14);
     expect(median(runs.map((r) => r[0].level))).toBeGreaterThan(8);
+  });
+
+  // feedback Phase 4: with the user's volume (15 dailies + 10 habits) the first bosses fall on day 3–4 and 8–9
+  it('user profile: boss 10 on day 3–4 with 2–3 chests, boss 20 about 5 days later', () => {
+    const runs = Array.from({ length: 5 }, (_, s) =>
+      simulateDetailed({ fulfillment: 1, days: 20, seed: 1000 + s, balance: BALANCE, checkpoints: [20] }),
+    );
+    const day = (stage: number) => median(runs.map((r) => r.milestones.find((m) => m.area === 1 && m.stage === stage)?.day ?? 99));
+    const chests = (stage: number) => median(runs.map((r) => r.milestones.find((m) => m.area === 1 && m.stage === stage)?.chests ?? -1));
+    expect(day(10)).toBeGreaterThanOrEqual(3);
+    expect(day(10)).toBeLessThanOrEqual(4);
+    expect(chests(10)).toBeGreaterThanOrEqual(2);
+    expect(chests(10)).toBeLessThanOrEqual(3);
+    expect(day(20) - day(10)).toBeGreaterThanOrEqual(4);
+    expect(day(20) - day(10)).toBeLessThanOrEqual(7);
   });
 
   it('is deterministic for a fixed seed', () => {

@@ -60,6 +60,8 @@ export interface DayLog {
 }
 
 export type Attribute = 'strength' | 'speed' | 'life';
+/** what an item can give: the three attributes + critical-hit chance (shields) */
+export type ItemStat = Attribute | 'crit';
 export type Slot = 'head' | 'body' | 'weapon' | 'shield';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
@@ -114,7 +116,8 @@ export interface Item {
   rarity: Rarity;
   name: string;
   spriteKey: string;
-  stats: Partial<Record<Attribute, number>>;
+  /** attribute points; `crit` = extra critical-hit chance in percent points (schema v4) */
+  stats: Partial<Record<ItemStat, number>>;
   levelAtPurchase: number;
   chestType: string;
   acquiredAt: number;
@@ -157,7 +160,9 @@ export interface DeathReport {
 export type GameEvent =
   | { type: 'levelUp'; level: number }
   | { type: 'levelDown'; level: number }
-  | { type: 'death'; report: DeathReport };
+  | { type: 'death'; report: DeathReport }
+  /** a boss dropped a chest: the item is already in the inventory (feedback Phase 4) */
+  | { type: 'chestDrop'; chest: import('./items').ChestId; item: Item; current: Item | null };
 
 /** Context passed into all logic functions (keeps them pure & testable) */
 export interface LogicContext {

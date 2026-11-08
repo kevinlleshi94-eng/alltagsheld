@@ -285,6 +285,11 @@ h3 {
   z-index: 3;
 }
 
+.dev-chip.pc {
+  background: #c0441c;
+  box-shadow: 0 0 0 2px var(--border-dark);
+}
+
 .battle-timer {
   position: absolute;
   top: calc(var(--safe-top) + 56px);
@@ -1347,6 +1352,8 @@ input[type='range'] {
   border: 2px solid var(--border-dark);
   border-radius: 4px;
   background: linear-gradient(180deg, var(--panel3) 0%, var(--panel2) 72%, var(--bg2) 100%);
+  position: relative;
+  overflow: hidden;
 }
 
 .hero-portrait canvas,
@@ -1355,8 +1362,51 @@ input[type='range'] {
   image-rendering: pixelated;
 }
 
+/* epic / legendary equipment: glow + rising sparkles (SPEC 7.3) */
+.hero-portrait.aura canvas {
+  filter: drop-shadow(0 0 3px var(--rarity));
+  animation: aura-pulse 2.4s ease-in-out infinite;
+}
+
+.hero-portrait.aura-legendary {
+  box-shadow: inset 0 0 18px rgba(255, 155, 48, 0.25);
+}
+
+.aura-spark {
+  position: absolute;
+  bottom: 14%;
+  width: 3px;
+  height: 3px;
+  background: var(--rarity-light);
+  box-shadow: 0 0 4px var(--rarity);
+  opacity: 0;
+  pointer-events: none;
+  animation: aura-spark 2.2s linear infinite;
+}
+
+@keyframes aura-pulse {
+  50% {
+    filter: drop-shadow(0 0 7px var(--rarity));
+  }
+}
+
+@keyframes aura-spark {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-110px);
+    opacity: 0;
+  }
+}
+
 .hero-portrait.exhausted canvas {
   filter: saturate(0.35) brightness(0.8);
+  animation: none;
 }
 
 .attr-row {
@@ -1373,11 +1423,60 @@ input[type='range'] {
   flex: 1;
 }
 
+.attr-row > .attr-next {
+  flex: none;
+}
+
 .attr-value {
   font-size: 22px;
   color: var(--gold);
   min-width: 30px;
   text-align: center;
+}
+
+/* attribute row (feedback Phase 4): name + value, effect now, value after the next point */
+.attr-main {
+  min-width: 0;
+}
+
+.attr-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.attr-head .attr-value {
+  min-width: 0;
+  font-size: 20px;
+}
+
+.attr-effect {
+  margin-top: 1px;
+}
+
+.attr-now {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.attr-next {
+  font-size: 16px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.attr-next.ready {
+  color: #7ee05e;
+}
+
+.gear-bonus {
+  margin-left: 3px;
+  font-size: 15px;
+  color: #7ee05e;
+}
+
+.attr-note {
+  margin: 6px 2px 0;
 }
 
 /* --- Sheets & modals -------------------------------------------------------- */
@@ -1554,6 +1653,52 @@ input[type='range'] {
 
 .modal-actions .btn {
   flex: 1;
+}
+
+/* "yesterday" (review + settlement): night colours, so it is clearly about the previous day */
+.yesterday {
+  --panel: #1c2340;
+  --panel2: #252d50;
+  --panel3: #313b68;
+  --border: #4a5794;
+  --border-dark: #0a0d1c;
+  --muted: #a9b2dc;
+}
+
+.sheet.yesterday {
+  background: linear-gradient(180deg, #2a3462 0, var(--panel) 160px);
+}
+
+.yesterday .sheet-header,
+.modal.yesterday {
+  background-image:
+    radial-gradient(1.5px 1.5px at 14% 22%, #fff 60%, transparent 70%),
+    radial-gradient(1px 1px at 38% 70%, #dfe6ff 60%, transparent 70%),
+    radial-gradient(1.5px 1.5px at 63% 18%, #fff 60%, transparent 70%),
+    radial-gradient(1px 1px at 82% 58%, #dfe6ff 60%, transparent 70%),
+    radial-gradient(1px 1px at 92% 16%, #fff 60%, transparent 70%);
+  background-size: 100% 90px;
+  background-repeat: no-repeat;
+}
+
+.modal.yesterday {
+  background-color: var(--panel);
+}
+
+.yesterday .sheet-titles h2,
+.yesterday .modal-title {
+  color: #f4e9b0;
+}
+
+.yesterday-overline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9fb0ff;
 }
 
 /* summary */

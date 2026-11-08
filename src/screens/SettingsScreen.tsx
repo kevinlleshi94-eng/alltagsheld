@@ -202,6 +202,7 @@ export function SettingsScreen() {
           checked={settings.todayPromptEnabled}
           onChange={(v) => updateSettings({ todayPromptEnabled: v })}
         />
+        <p className="muted small">Der Rückblick auf gestern kommt immer beim ersten Öffnen am Tag.</p>
       </Section>
 
       <Section title="Backup">
@@ -266,7 +267,7 @@ export function SettingsScreen() {
       {devOpen && <DevMenu />}
 
       <button className="version" onClick={onVersionTap}>
-        Alltagsheld · Version {__APP_VERSION__}
+        Alltagsheld · Version {__APP_VERSION__} · {import.meta.env.DEV ? 'PC-Testversion' : 'Online-Version'}
       </button>
       {confirmUi}
     </div>

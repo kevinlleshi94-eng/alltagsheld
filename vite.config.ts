@@ -22,6 +22,15 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // dev server only: a home-screen icon added from the PC test version gets its own name
+    {
+      name: 'dev-app-title',
+      apply: 'serve',
+      transformIndexHtml: (html) =>
+        html
+          .replace('<title>Alltagsheld</title>', '<title>Alltagsheld PC-Test</title>')
+          .replace('name="apple-mobile-web-app-title" content="Alltagsheld"', 'name="apple-mobile-web-app-title" content="Alltagsheld PC"'),
+    },
     VitePWA({
       registerType: 'prompt',
       includeAssets: ['favicon.png', 'apple-touch-icon.png'],

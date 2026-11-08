@@ -86,7 +86,7 @@ Es gibt genau **zwei Aufgabentypen**:
 Tageswechsel ist **Mitternacht (lokale Zeit)**. Beim Öffnen der App (Kaltstart **und** Rückkehr aus dem Hintergrund) läuft folgende Reihenfolge:
 
 ### Schritt 1 – Rückblick „Gestern“ (nur wenn seit dem letzten Öffnen ein Tageswechsel war)
-- Vollbild-Dialog: „Was hast du gestern geschafft?“
+- Vollbild-Dialog: „Was hast du gestern geschafft?“ – **in eigener Nacht-Optik** (dunkelblau, Mond, Sterne), damit klar ist, dass es um den Vortag geht. Erscheint also nur beim ersten Öffnen am Tag.
 - Liste aller **gestrigen, noch nicht abgehakten** täglichen Aufgaben mit Checkboxen.
 - Darunter die Gewohnheiten mit +/− Zählern für **gestern** (falls ich am Vorabend etwas nicht eingetragen habe).
 - Button **„Fertig“** → Eingaben übernehmen.
@@ -99,7 +99,7 @@ Tageswechsel ist **Mitternacht (lokale Zeit)**. Beim Öffnen der App (Kaltstart 
 ### Schritt 2 – Abfrage „Heute“
 - Dialog mit allen **heute noch offenen** täglichen Aufgaben als **Liste mit Checkboxen** + Gewohnheiten-Buttons.
 - Button „Fertig“ oder wegwischen → Hauptbildschirm.
-- Erscheint nicht, wenn heute bereits alles erledigt ist. In den Einstellungen abschaltbar.
+- Erscheint nicht, wenn heute bereits alles erledigt ist. In den Einstellungen schaltbar – **standardmäßig aus** (Nutzerentscheidung nach Phase 3: nach dem Rückblick direkt zum Hauptbildschirm).
 
 ### Schritt 3 – Hauptbildschirm
 - Angesammelte Ereignisse (Level-Up, Erfolge, Haustier freigeschaltet) werden **nacheinander** als Popups angezeigt, nicht gleichzeitig.
@@ -124,7 +124,8 @@ Tageswechsel ist **Mitternacht (lokale Zeit)**. Beim Öffnen der App (Kaltstart 
 
 ### 4.3 Gold
 - Wird nur für den Shop verwendet (siehe 7).
-- **Gold und XP gibt es ausschließlich für echte Aufgaben.** Besiegte Gegner geben nur Spielfortschritt – im Spiel kann man nicht „farmen“.
+- **XP gibt es ausschließlich für echte Aufgaben.** Normale Gegner geben nur Spielfortschritt – im Spiel kann man nicht „farmen“.
+- **Ausnahme Bosse** (Feedback Phase 4): Der **erste** Sieg über einen Zwischenboss (Stufe 10/20) oder Gebietsboss (Stufe 25) gibt Gold und mit etwas Glück eine Truhe (Zwischenboss 15 % Holz, Gebietsboss 35 % Eisen, Drache immer Gold). Nach einem Tod gibt derselbe Boss nichts mehr.
 
 ---
 
@@ -170,11 +171,12 @@ Neben den Kampf-Lebenspunkten gibt es eine dauerhafte Ressource **Vitalität** (
   - Kampf-LP = 100 + 15 × Leben + Ausrüstung
   - Schaden pro Treffer = 10 + 3 × Stärke + Ausrüstung (−25 % wenn erschöpft)
   - Angriffsintervall = 1,2 s / (1 + 0,06 × Angriffsgeschwindigkeit + Ausrüstung), min. 0,25 s
-  - Kritische Treffer: 10 % Chance, ×1,5 Schaden
+  - Kritische Treffer: 10 % Chance + Krit-Chance der Ausrüstung (Schild, max. 60 %), ×1,5 Schaden
 - **Gegner**
-  - Werte wachsen mit der Stufe (Startwert: ca. +4 % pro Stufe auf LP und Schaden). Jeder Gegnertyp hat eigene Eigenschaften (z. B. Wölfe schnell & schwach, Golems langsam & zäh).
-  - **Boss** auf jeder 10. Stufe: ×3 LP, ×1,5 Schaden, **Timer 15 s**, größer dargestellt, eigener Auftritt (Boss-Banner + Sound).
-  - **Gebietsboss** auf Stufe 25: ×5 LP, **Timer 20 s**.
+  - Werte wachsen mit der Stufe (+7 % pro Stufe auf LP und Schaden, Stand Phase 4; Formeln in BALANCING.md). Jeder Gegnertyp hat eigene Eigenschaften (z. B. Wölfe schnell & schwach, Golems langsam & zäh).
+  - **Boss** auf jeder 10. Stufe: ×3 LP, ×1,5 Schaden, **Timer 10 s**, größer dargestellt, eigener Auftritt (Boss-Banner + Sound).
+  - **Gebietsboss** auf Stufe 25: ×2,5 LP (auf der höheren Stufe), ×1,5 Schaden, **Timer 10 s**.
+  - Timer überall 10 s (Nutzer-Feedback Phase 2, ursprünglich 15/20 s).
 
 ### 6.4 Welt: 8 Gebiete × 25 Stufen
 Nach jedem Gebietsboss wechselt die Landschaft (Übergangsanimation). Gegner variieren so stark wie möglich:
@@ -206,29 +208,30 @@ Zwischenbosse (Stufe 10 und 20) sind größere, stärkere Varianten der Gebietsg
 Beim ersten Start: Name, Körpertyp, Hautfarbe, Frisur, Haarfarbe. Start-Ausrüstung: einfache Stoffkleidung, Holzschwert, kein Schild. Aussehen später in den Einstellungen änderbar. Keine Klassen.
 
 ### 7.2 Ausrüstungsplätze
-**Kopf, Körper, Waffe, Schild.** Jedes Teil ist **sichtbar am Avatar** und gibt Werte-Boni:
-- Waffe → Stärke
-- Schild → Leben
-- Kopf → Leben, mit Chance auf Angriffsgeschwindigkeit
-- Körper → Leben und/oder Stärke
-- Episch und Legendär erhalten zusätzlich einen zweiten Bonus.
+**Kopf, Körper, Waffe, Schild.** Jedes Teil ist **sichtbar am Avatar** und gibt Werte-Boni (feste Regeln seit dem Feedback zu Phase 4):
+- Waffe → Stärke, manche Waffen zusätzlich Angriffsgeschwindigkeit
+- Helm (Kopf) → nur Angriffsgeschwindigkeit
+- Rüstung (Körper) → Leben
+- Schild → Leben und kritische Trefferchance
+- Episch und Legendär sind deutlich stärker (+50 %) und tragen den Hauptwert im Namen („… der Präzision“).
 
 ### 7.3 Shop mit Zufallstruhen
-- Ich wähle den **Platz** (Kopf/Körper/Waffe/Schild) und die **Truhe**. Aussehen, Werte und Seltenheit sind **zufällig**.
+- Ich wähle den **Platz** (Kopf/Körper/Waffe/Schild) und die **Truhe**. Werte und Seltenheit sind **zufällig**; das Aussehen am Helden ergibt sich aus Platz + Seltenheit (je Seltenheit ein sichtbar anderes Teil).
 - Je teurer die Truhe, desto höher die Chance auf starke Items – Legendär bleibt sehr unwahrscheinlich:
 
 | Truhe | Preis | Gewöhnlich | Ungewöhnlich | Selten | Episch | Legendär |
 |---|---|---|---|---|---|---|
-| Holztruhe | 100 | 70 % | 25 % | 5 % | 0 % | 0 % |
-| Eisentruhe | 400 | 35 % | 40 % | 20 % | 4,5 % | 0,5 % |
-| Goldtruhe | 1.500 | 10 % | 35 % | 40 % | 13 % | 2 % |
+| Holztruhe | 250 | 70 % | 25 % | 5 % | 0 % | 0 % |
+| Eisentruhe | 1.000 | 35 % | 40 % | 20 % | 4,5 % | 0,5 % |
+| Goldtruhe | 3.750 | 10 % | 35 % | 40 % | 13 % | 2 % |
 
-- Seltenheitsfarben: grau, grün, blau, lila, orange. Episch/Legendär mit leichtem Glanz-/Partikeleffekt am Avatar.
+- Preise ×2,5 nach dem Feedback zu Phase 4 (2–3 Truhen bis zum ersten Zwischenboss, siehe BALANCING.md).
+- Seltenheitsfarben: grau, grün, blau, lila, orange – **nur für Schrift/Rahmen**, das Item-Bild zeigt das echte Material wie im Kampf. Episch/Legendär mit leichtem Glanz-/Partikeleffekt am Avatar.
 - **Itemwerte skalieren mit Seltenheit** (Startfaktoren 1 / 1,5 / 2,2 / 3,2 / 5) **und meinem Level beim Kauf**, damit Truhen auch später relevant bleiben. Leichte Zufallsstreuung (±15 %).
 - Generierte Namen, z. B. „Rostiges Kurzschwert“, „Verstärkter Lederhelm“, „Legendärer Drachenschuppenpanzer“.
 - **Truhen-Öffnungsanimation** (Wackeln → Aufspringen → Lichtstrahl in Seltenheitsfarbe).
-- Danach: „Anlegen“ oder „Ins Inventar“. Vergleich mit dem aktuell angelegten Teil (Werte grün/rot).
-- **Inventar:** alle Items; anlegen, ablegen, **verkaufen für 25 % des Truhenpreises**.
+- Danach: „Anlegen“ oder „Ins Inventar“. Vergleich mit dem aktuell angelegten Teil (Werte grün/rot). Das Item ist ab dem Kauf gespeichert (im Inventar) – wird die App mitten in der Animation geschlossen, geht nichts verloren.
+- **Inventar:** Filter (alle oder ein Platz), sortiert vom seltensten zum einfachsten Teil; anlegen, ablegen, **verkaufen für 25 % des Truhenpreises**.
 
 ---
 
@@ -266,7 +269,7 @@ Eigener Bildschirm mit freigeschalteten und gesperrten Erfolgen (gesperrte zeige
 
 ## 11. Balancing (Pflicht)
 
-Schreibe ein **Simulationsskript** (`npm run simulate`), das mit den Startaufgaben 30 / 90 / 180 Tage durchspielt – bei 50 %, 75 %, 90 % und 100 % täglicher Erfüllung, inklusive Shopkäufen (einfache Strategie: immer beste leistbare Truhe für den schwächsten Platz) und optimaler Attributverteilung. Ausgabe als Tabelle: Level, erreichte Stufe/Gebiet, Tode, Gold.
+Schreibe ein **Simulationsskript** (`npm run simulate`), das mit den Startaufgaben 30 / 90 / 180 Tage durchspielt – bei 50 %, 75 %, 90 % und 100 % täglicher Erfüllung, inklusive Shopkäufen (einfache Strategie: immer beste leistbare Truhe für den schwächsten Platz) und optimaler Attributverteilung. Ausgabe als Tabelle: Level, erreichte Stufe/Gebiet, Tode, Gold. Seit dem Feedback zu Phase 4 rechnet die Simulation standardmäßig mit meinem echten Umfang (15 tägliche Aufgaben + 10 positive Gewohnheiten) und gibt zusätzlich die Tage bis zu jedem Boss samt Truhenzahl aus.
 
 **Zielwerte** – passe die Formeln in `balance.ts` an, bis sie ungefähr erreicht werden:
 - 90 % Erfüllung: Drache (Ende Gebiet 8) nach ca. **5–6 Monaten**.

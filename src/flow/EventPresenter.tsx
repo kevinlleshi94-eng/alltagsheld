@@ -5,6 +5,7 @@ import { BALANCE } from '../game/balance';
 import { heroStats } from '../game/combat';
 import type { Attribute, DeathReport, Player } from '../game/types';
 import { formatStage } from '../game/world';
+import { ChestOpening } from '../shop/ChestOpening';
 import { useEquippedItems, usePlayer } from '../state/hooks';
 import { useStore } from '../state/store';
 import { eventQueue, flow, popEvent, type QueuedEvent } from '../state/ui';
@@ -52,6 +53,18 @@ export function EventPresenter() {
   if (next.event.type === 'death') return <DeathScreen report={next.event.report} onClose={() => popEvent(next.id)} />;
   if (next.event.type === 'levelUp' && player.level >= next.event.level)
     return <LevelUpPopup key={next.id} item={next} level={next.event.level} player={player} />;
+  if (next.event.type === 'chestDrop') {
+    const { chest, item, current } = next.event;
+    return (
+      <ChestOpening
+        key={next.id}
+        chest={chest}
+        outcome={{ item, current }}
+        caption="Beute vom Boss!"
+        onDone={() => popEvent(next.id)}
+      />
+    );
+  }
   return null;
 }
 

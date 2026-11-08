@@ -3,10 +3,12 @@
  * writes results back – each action in one transaction.
  */
 import { BALANCE } from '../game/balance';
-import { applyVictory, type VictoryResult } from '../game/combat';
+import { winFight, type VictoryOutcome } from '../game/bossRewards';
 import { toDateKey } from '../game/dates';
 import { allocateAttribute } from '../game/progression';
+import type { ChestId } from '../game/items';
 import { applyDelta } from '../game/resources';
+import { buyChest, equipItem, sellItem, ShopError, unequipSlot } from '../game/shop';
 import { createInitialPlayer, createSeedTasks, defaultSettings } from '../game/seed';
 import { pendingDays, settle, type ReviewInput, type SettlementResult } from '../game/settlement';
 import { checkDaily, emptyLog, tapHabit, uncheckDaily, undoLastHabitTap, type ActionResult } from '../game/taskActions';
@@ -15,9 +17,11 @@ import type {
   Delta,
   GameEvent,
   HabitTapKind,
+  Item,
   LogicContext,
   Player,
   Settings,
+  Slot,
   StagePosition,
   Task,
   TaskType,
@@ -138,6 +142,55 @@ export async function spendAttributePoint(attribute: Attribute): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Shop & equipment (SPEC 7.3)
+// ---------------------------------------------------------------------------
+
+export interface ChestOutcome {
+  item: Item;
+  /** what is in that slot right now (for the comparison) */
+  current: Item | null;
+}
+
+/** pays the chest and stores the new item in the inventory (not equipped yet) */
+export async function buyChestItem(slot: Slot, chest: ChestId): Promise<ChestOutcome> {
+  return db.transaction('rw', [db.player, db.items], async () => {
+    const player = await getPlayer();
+    const r = buyChest(player, slot, chest, logicContext(), newId());
+    const currentId = player.equipped[slot];
+    const current = currentId ? ((await db.items.get(currentId)) ?? null) : null;
+    await db.player.put(r.player);
+    await db.items.put(r.item);
+    return { item: r.item, current };
+  });
+}
+
+export async function equipItemById(itemId: string): Promise<void> {
+  await db.transaction('rw', [db.player, db.items], async () => {
+    const item = await db.items.get(itemId);
+    if (!item) throw new ShopError('Gegenstand nicht gefunden');
+    await db.player.put(equipItem(await getPlayer(), item));
+  });
+}
+
+export async function unequip(slot: Slot): Promise<void> {
+  await db.transaction('rw', db.player, async () => {
+    await db.player.put(unequipSlot(await getPlayer(), slot));
+  });
+}
+
+/** sells the item (also when equipped), returns the gold received */
+export async function sellItemById(itemId: string): Promise<number> {
+  return db.transaction('rw', [db.player, db.items], async () => {
+    const item = await db.items.get(itemId);
+    if (!item) throw new ShopError('Gegenstand nicht gefunden');
+    const r = sellItem(await getPlayer(), item, logicContext());
+    await db.player.put(r.player);
+    await db.items.delete(itemId);
+    return r.gold;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Combat
 // ---------------------------------------------------------------------------
 
@@ -145,14 +198,27 @@ export async function spendAttributePoint(attribute: Attribute): Promise<void> {
  * The battle scene beat the enemy at `expected`. Advances only if the hero is
  * still there (a death or the dev menu may have moved them in the meantime).
  */
-export async function recordVictory(expected: StagePosition): Promise<VictoryResult | null> {
-  return db.transaction('rw', db.player, async () => {
+export async function recordVictory(expected: StagePosition): Promise<RecordedVictory | null> {
+  return db.transaction('rw', [db.player, db.items], async () => {
     const player = await getPlayer();
     if (player.round !== expected.round || player.area !== expected.area || player.stage !== expected.stage) return null;
-    const result = applyVictory(player, BALANCE);
+    // boss beaten for the first time → gold, maybe a chest (feedback Phase 4)
+    const result = winFight(player, logicContext(), newId);
+    let current: Item | null = null;
+    const drop = result.reward?.drop;
+    if (drop) {
+      const currentId = result.player.equipped[drop.item.slot];
+      current = currentId ? ((await db.items.get(currentId)) ?? null) : null;
+      await db.items.put(drop.item);
+    }
     await db.player.put(result.player);
-    return result;
+    return { ...result, dropCurrent: current };
   });
+}
+
+/** victory as stored: + the item worn in the slot of a dropped item (for the comparison) */
+export interface RecordedVictory extends VictoryOutcome {
+  dropCurrent: Item | null;
 }
 
 // ---------------------------------------------------------------------------

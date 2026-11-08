@@ -13,18 +13,37 @@ export function dps(s: HeroStats): number {
   return (s.damage * (1 + s.critChance * (s.critMultiplier - 1))) / s.attackInterval;
 }
 
-/** "+3 Schaden" etc. – what one more point in `attr` would change right now */
-export function attributeGain(current: HeroStats, attr: Attribute, balance: Balance): string {
+const dec = (n: number) => num(n, Number.isInteger(n) ? 0 : 1);
+
+export interface AttributePreview {
+  /** what the attribute changes, e.g. „Schaden pro Treffer“ */
+  label: string;
+  /** value now */
+  now: string;
+  /** value after one more point (null = already at the maximum) */
+  next: string | null;
+}
+
+/** current combat value of an attribute and the value after one more point (feedback Phase 4) */
+export function attributePreview(current: HeroStats, attr: Attribute, balance: Balance): AttributePreview {
   const attrs = { ...current.attributes, [attr]: current.attributes[attr] + 1 };
-  const next = heroStatsFromAttributes(attrs, current.exhausted, balance);
+  const next = heroStatsFromAttributes(attrs, current.exhausted, balance, current.critBonus);
   switch (attr) {
     case 'strength':
-      return `+${num(next.damage - current.damage, Number.isInteger(next.damage - current.damage) ? 0 : 1)} Schaden pro Treffer`;
+      return { label: 'Schaden pro Treffer', now: dec(current.damage), next: dec(next.damage) };
     case 'life':
-      return `+${num(next.maxHp - current.maxHp)} Lebenspunkte im Kampf`;
+      return { label: 'Lebenspunkte', now: num(current.maxHp), next: num(next.maxHp) };
     case 'speed':
-      return next.attackInterval < current.attackInterval
-        ? `Angriff alle ${formatSeconds(current.attackInterval)} → ${formatSeconds(next.attackInterval)}`
-        : 'Maximales Tempo erreicht';
+      return {
+        label: 'Angriff alle',
+        now: formatSeconds(current.attackInterval),
+        next: next.attackInterval < current.attackInterval ? formatSeconds(next.attackInterval) : null,
+      };
   }
+}
+
+/** „Schaden pro Treffer 28 → 31“ – what one more point in `attr` would change right now */
+export function attributeGain(current: HeroStats, attr: Attribute, balance: Balance): string {
+  const p = attributePreview(current, attr, balance);
+  return p.next ? `${p.label} ${p.now} → ${p.next}` : `${p.label} ${p.now} (Maximum)`;
 }

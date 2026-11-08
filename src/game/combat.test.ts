@@ -4,6 +4,7 @@ import {
   canBeat,
   effectiveAttributes,
   enemyForStage,
+  gearCrit,
   heroStats,
   heroStatsFromAttributes,
   nextStage,
@@ -47,6 +48,16 @@ describe('hero stats (SPEC 6.3)', () => {
   it('adds equipment bonuses as attribute points', () => {
     const a = effectiveAttributes({ attributes: attrs(1, 0, 2) }, [{ stats: { strength: 3 } }, null, { stats: { life: 1, speed: 2 } }]);
     expect(a).toEqual(attrs(4, 2, 3));
+  });
+
+  it('shields add Krit-Chance (percent points), capped', () => {
+    const shield = { stats: { life: 2, crit: 6 } };
+    expect(gearCrit([shield, null, { stats: { strength: 1 } }])).toBe(6);
+    expect(effectiveAttributes({ attributes: attrs(0, 0, 0) }, [shield])).toEqual(attrs(0, 0, 2));
+    const s = heroStats({ attributes: attrs(0, 0, 0), vitality: 100 }, [shield], BALANCE);
+    expect(s.critChance).toBeCloseTo(BALANCE.combat.critChance + 0.06);
+    expect(s.critBonus).toBe(6);
+    expect(heroStatsFromAttributes(attrs(0, 0, 0), false, BALANCE, 500).critChance).toBe(BALANCE.combat.maxCritChance);
   });
 });
 
@@ -176,15 +187,17 @@ describe('early game (SPEC 11)', () => {
     return wins / n;
   };
 
-  it('the first boss (stage 10) needs the first level-ups, even with lucky crits', () => {
-    expect(winRate(heroStatsFromAttributes(attrs(0, 0, 0), false, BALANCE), 10)).toBe(0);
-    expect(winRate(heroStatsFromAttributes(attrs(1, 0, 0), false, BALANCE), 10)).toBeLessThan(0.35);
-    expect(winRate(heroStatsFromAttributes(attrs(2, 0, 0), false, BALANCE), 10)).toBeGreaterThan(0.9);
+  // feedback Phase 4 (user volume 35 points/day): boss 10 on day 3–4 with level 5 + the first 2–3 chests,
+  // boss 20 about 5 days later (level 8, 4 chests) – see BALANCING.md
+  it('the first boss (stage 10) needs level 5 and the first chests', () => {
+    expect(winRate(heroStatsFromAttributes(attrs(2, 0, 0), false, BALANCE), 10)).toBe(0); // day 1
+    expect(winRate(heroStatsFromAttributes(attrs(4, 0, 0), false, BALANCE), 10)).toBeLessThan(0.1); // level 5, no items
+    expect(winRate(heroStatsFromAttributes(attrs(6, 1, 1), false, BALANCE), 10)).toBeGreaterThan(0.9); // + 2 wood items
   });
 
-  it('after day 1 (2 points) the hero is stopped by the second boss (stage 20)', () => {
-    const hero = heroStatsFromAttributes(attrs(2, 0, 0), false, BALANCE);
-    expect(winRate(hero, 20)).toBe(0);
+  it('the second boss (stage 20) needs about a week more', () => {
+    expect(winRate(heroStatsFromAttributes(attrs(6, 1, 1), false, BALANCE), 20)).toBe(0);
+    expect(winRate(heroStatsFromAttributes(attrs(12, 2, 2), false, BALANCE), 20)).toBeGreaterThan(0.8);
   });
 
   it('attribute points move the wall', () => {
@@ -207,20 +220,30 @@ describe('items', () => {
     expect(counts.epic ?? 0).toBe(0);
   });
 
-  it('follows the slot rules and gives epic/legendary a second bonus', () => {
+  it('follows the slot rules (feedback Phase 4)', () => {
     const rng = seededRng(9);
-    expect(Object.keys(rollItemStats('weapon', 'common', 1, rng, BALANCE))).toEqual(['strength']);
-    expect(Object.keys(rollItemStats('shield', 'rare', 5, rng, BALANCE))).toEqual(['life']);
-    const epicSword = rollItemStats('weapon', 'epic', 10, rng, BALANCE);
-    expect(Object.keys(epicSword)).toHaveLength(2);
-    expect(epicSword.strength).toBeGreaterThan(0);
+    for (const rarity of ['common', 'rare', 'legendary'] as const)
+      for (let i = 0; i < 30; i++) {
+        const weapon = rollItemStats('weapon', rarity, 10, rng, BALANCE);
+        expect(weapon.strength).toBeGreaterThan(0);
+        expect(Object.keys(weapon).every((k) => k === 'strength' || k === 'speed')).toBe(true);
+        expect(Object.keys(rollItemStats('head', rarity, 10, rng, BALANCE))).toEqual(['speed']);
+        expect(Object.keys(rollItemStats('body', rarity, 10, rng, BALANCE))).toEqual(['life']);
+        expect(Object.keys(rollItemStats('shield', rarity, 10, rng, BALANCE))).toEqual(['life', 'crit']);
+      }
+  });
+
+  it('some weapons also give Tempo', () => {
+    const rng = seededRng(4);
+    const withSpeed = Array.from({ length: 400 }, () => rollItemStats('weapon', 'rare', 5, rng, BALANCE)).filter((w) => w.speed).length;
+    expect(withSpeed / 400).toBeCloseTo(BALANCE.items.weaponSpeedChance, 1);
   });
 
   it('item value grows with rarity and player level', () => {
     const avg = (rarity: 'common' | 'legendary', level: number) => {
       const rng = seededRng(2);
       let sum = 0;
-      for (let i = 0; i < 200; i++) sum += itemPower(rollItemStats('weapon', rarity, level, rng, BALANCE));
+      for (let i = 0; i < 200; i++) sum += itemPower(rollItemStats('weapon', rarity, level, rng, BALANCE), BALANCE);
       return sum / 200;
     };
     expect(avg('legendary', 1)).toBeGreaterThan(avg('common', 1) * 3);

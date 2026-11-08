@@ -6,6 +6,7 @@ import type { DayLog, Item, Player, Settings, Task } from '../game/types';
 import { db } from '../db/db';
 import { clock } from '../lib/clock';
 import { createStore } from './store';
+import { fightBlockers } from './ui';
 
 // "today" changes at midnight or when the dev menu shifts the clock
 const todayStore = createStore(toDateKey(clock.now()));
@@ -50,6 +51,25 @@ export function useEquippedItems(player: Player | undefined): Item[] {
     [key],
   );
   return items ?? NO_ITEMS;
+}
+
+/** All items (inventory + equipped), live */
+export function useItems(): Item[] | undefined {
+  return useLiveQuery(() => db.items.toArray(), []);
+}
+
+/** Freezes the fight while the calling component is mounted (and `active`) */
+export function usePauseFight(active = true) {
+  useEffect(() => {
+    if (!active) return;
+    fightBlockers.set((n) => n + 1);
+    return () => fightBlockers.set((n) => n - 1);
+  }, [active]);
+}
+
+/** true when the user asked iOS/the OS for less motion */
+export function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 }
 
 /** Runs `fn` when the clock offset changes (dev menu) */

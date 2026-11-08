@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Item } from '../game/types';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import type { Item, Rarity } from '../game/types';
+import { mix } from '../shop/art';
+import { RARITY_COLORS } from '../ui/labels';
 import { PixelSprite } from '../ui/PixelIcon';
 import { gearOf, heroLook, lookKey } from './assets/catalog';
 import { composeCharacter, opaqueBounds } from './assets/compose';
@@ -13,8 +15,22 @@ const PAD = 2;
 const SHADOW_RX = 11;
 const SHADOW_RY = 3;
 
-/** Hero as in the fight (same LPC parts and equipment), standing still. Falls back to the placeholder art. */
-export function HeroPortrait({ equipped, exhausted }: { equipped: readonly Item[]; exhausted?: boolean }) {
+/** rising sparkles around a hero with epic / legendary equipment */
+const AURA_SPARKS = 7;
+
+/**
+ * Hero as in the fight (same LPC parts and equipment), standing still. Falls back to the placeholder art.
+ * `aura` = best equipped rarity: epic / legendary get a glow with sparkles (SPEC 7.3).
+ */
+export function HeroPortrait({
+  equipped,
+  exhausted,
+  aura,
+}: {
+  equipped: readonly Item[];
+  exhausted?: boolean;
+  aura?: Rarity | null;
+}) {
   const look = useMemo(() => heroLook(gearOf(equipped)), [equipped]);
   const key = lookKey(look);
   const ref = useRef<HTMLCanvasElement>(null);
@@ -67,8 +83,21 @@ export function HeroPortrait({ equipped, exhausted }: { equipped: readonly Item[
     // `key` describes `look` completely
   }, [key]);
 
+  const glowing = aura === 'epic' || aura === 'legendary';
+  const style = glowing
+    ? ({ '--rarity': RARITY_COLORS[aura], '--rarity-light': mix(RARITY_COLORS[aura], '#ffffff', 0.55) } as CSSProperties)
+    : undefined;
+
   return (
-    <div className={`hero-portrait ${exhausted ? 'exhausted' : ''}`} aria-hidden>
+    <div className={`hero-portrait ${exhausted ? 'exhausted' : ''} ${glowing ? `aura aura-${aura}` : ''}`} style={style} aria-hidden>
+      {glowing &&
+        Array.from({ length: AURA_SPARKS }, (_, i) => (
+          <span
+            key={i}
+            className="aura-spark"
+            style={{ left: `${22 + ((i * 37) % 58)}%`, animationDelay: `${((i * 0.43) % 2.2).toFixed(2)}s` }}
+          />
+        ))}
       <canvas ref={ref} className="hero-portrait-canvas" hidden={state !== 'ready'} />
       {state === 'failed' && <PixelSprite rows={HERO} palette={HERO_PALETTE} scale={SCALE * 2} />}
     </div>

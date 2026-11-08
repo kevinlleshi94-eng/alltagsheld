@@ -7,23 +7,28 @@ import { createSnapshot, parseSnapshot, restoreSnapshot } from './backup';
 import Dexie from 'dexie';
 import { AlltagsheldDB, db, SCHEMA_VERSION } from './db';
 import {
+  buyChestItem,
   createTask,
   deleteTask,
+  devAddResources,
   devAdvanceDays,
   devSetStage,
   devSetVitality,
   ensureInitialized,
+  equipItemById,
   getPendingDays,
   getPlayer,
   recordVictory,
   reorderTasks,
   resetGame,
   runSettlement,
+  sellItemById,
   setTaskArchived,
   tapHabitToday,
   todayKey,
   toggleDaily,
   undoHabitToday,
+  unequip,
 } from './repo';
 
 const NOON = new Date(2026, 10, 5, 12, 0, 0).getTime();
@@ -215,6 +220,137 @@ describe('combat progress', () => {
     const p = await getPlayer();
     expect(p).toMatchObject({ round: 2, area: 1, stage: 1 });
     expect(p.progress).toMatchObject({ bossesDefeated: 1, dragonsDefeated: 1, highestStageIndex: 200 });
+    // the dragon always drops a gold chest (item lands in the inventory)
+    expect(r?.reward?.drop?.chest).toBe('gold');
+    expect(await db.items.get(r!.reward!.drop!.item.id)).toEqual(r!.reward!.drop!.item);
+    expect(Object.values(p.equipped)).not.toContain(r!.reward!.drop!.item.id);
+  });
+
+  it('a boss gives gold only the first time (feedback Phase 4)', async () => {
+    await devSetStage(1, 1, 10);
+    const first = await recordVictory({ round: 1, area: 1, stage: 10 });
+    expect(first?.reward?.gold).toBe(BALANCE.bossRewards.goldBoss);
+    expect((await getPlayer()).gold).toBe(BALANCE.bossRewards.goldBoss);
+    // after a death the hero is back at the area start and beats the boss again: no reward
+    await devSetStage(1, 1, 10);
+    const again = await recordVictory({ round: 1, area: 1, stage: 10 });
+    expect(again?.kind).toBe('boss');
+    expect(again?.reward).toBeNull();
+    expect((await getPlayer()).gold).toBe(BALANCE.bossRewards.goldBoss);
+  });
+
+  it('normal enemies give nothing', async () => {
+    const r = await recordVictory({ round: 1, area: 1, stage: 1 });
+    expect(r?.reward).toBeNull();
+    expect((await getPlayer()).gold).toBe(0);
+  });
+});
+
+describe('shop', () => {
+  it('buys, equips, compares and sells an item', async () => {
+    const { wood, iron } = BALANCE.items.chests;
+    await devAddResources({ gold: iron.price + wood.price });
+    const first = await buyChestItem('weapon', 'iron');
+    expect(first.current).toBeNull();
+    expect((await getPlayer()).gold).toBe(wood.price);
+    expect(await db.items.get(first.item.id)).toEqual(first.item);
+
+    await equipItemById(first.item.id);
+    expect((await getPlayer()).equipped.weapon).toBe(first.item.id);
+
+    const second = await buyChestItem('weapon', 'wood');
+    expect(second.current?.id).toBe(first.item.id);
+
+    // selling the equipped item: unequipped, deleted, 25 % of the iron chest back
+    const back = iron.price * BALANCE.items.sellFraction;
+    expect(await sellItemById(first.item.id)).toBe(back);
+    const p = await getPlayer();
+    expect(p.equipped.weapon).toBeNull();
+    expect(p.gold).toBe(back);
+    expect(await db.items.get(first.item.id)).toBeUndefined();
+
+    await equipItemById(second.item.id);
+    await unequip('weapon');
+    expect((await getPlayer()).equipped.weapon).toBeNull();
+    expect(await db.items.count()).toBe(1);
+  });
+
+  it('does not buy without enough gold', async () => {
+    await expect(buyChestItem('head', 'wood')).rejects.toThrow('Nicht genug Gold');
+    expect(await db.items.count()).toBe(0);
+  });
+});
+
+describe('schema v4', () => {
+  const oldItem = {
+    id: 'old',
+    slot: 'head' as const,
+    rarity: 'rare' as const,
+    name: 'Edle Barbuta',
+    spriteKey: 'head:rare',
+    stats: { life: 5 },
+    levelAtPurchase: 3,
+    chestType: 'iron',
+    acquiredAt: NOON,
+  };
+
+  it('converts items of a v3 backup to the new slot rules', async () => {
+    const snapshot = await createSnapshot();
+    const v3 = { ...snapshot, schemaVersion: 3, data: { ...snapshot.data, items: [oldItem] } };
+    await restoreSnapshot(parseSnapshot(JSON.stringify(v3)));
+    expect((await db.items.get('old'))?.stats).toEqual({ speed: 5 });
+  });
+
+  it('converts items in an existing v3 database', async () => {
+    const name = 'alltagsheld-upgrade-v4-test';
+    await Dexie.delete(name);
+    const v3 = new Dexie(name);
+    v3.version(3).stores({
+      tasks: 'id, type, order',
+      dayLogs: '[date+taskId], date, taskId',
+      player: 'id',
+      items: 'id, slot',
+      achievements: 'id',
+      settings: 'id',
+    });
+    await v3.table('items').put(oldItem);
+    v3.close();
+
+    const upgraded = new AlltagsheldDB(name);
+    expect((await upgraded.items.get('old'))?.stats).toEqual({ speed: 5 });
+    expect(upgraded.verno).toBe(SCHEMA_VERSION);
+    upgraded.close();
+    await Dexie.delete(name);
+  });
+});
+
+describe('schema v3', () => {
+  it('turns the "today" prompt off when importing a v2 backup', async () => {
+    const snapshot = await createSnapshot();
+    const v2 = { ...snapshot, schemaVersion: 2, data: { ...snapshot.data, settings: { ...snapshot.data.settings, todayPromptEnabled: true } } };
+    await restoreSnapshot(parseSnapshot(JSON.stringify(v2)));
+    expect((await db.settings.get('settings'))?.todayPromptEnabled).toBe(false);
+  });
+
+  it('turns the "today" prompt off in an existing v2 database', async () => {
+    const name = 'alltagsheld-upgrade-v3-test';
+    await Dexie.delete(name);
+    const v2 = new Dexie(name);
+    v2.version(2).stores({
+      tasks: 'id, type, order',
+      dayLogs: '[date+taskId], date, taskId',
+      player: 'id',
+      items: 'id, slot',
+      achievements: 'id',
+      settings: 'id',
+    });
+    await v2.table('settings').put({ ...(await db.settings.get('settings')), todayPromptEnabled: true });
+    v2.close();
+
+    const upgraded = new AlltagsheldDB(name);
+    expect((await upgraded.settings.get('settings'))?.todayPromptEnabled).toBe(false);
+    upgraded.close();
+    await Dexie.delete(name);
   });
 });
 

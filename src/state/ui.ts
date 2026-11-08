@@ -1,5 +1,5 @@
 import type { SettlementOutcome } from '../db/repo';
-import type { Delta, GameEvent } from '../game/types';
+import type { Delta, GameEvent, Slot } from '../game/types';
 import { createStore } from './store';
 
 // ---------------------------------------------------------------------------
@@ -99,3 +99,11 @@ export function toast(text: string) {
 // ---------------------------------------------------------------------------
 export type TabId = 'today' | 'character' | 'shop' | 'stats' | 'more';
 export const activeTab = createStore<TabId>('today');
+
+/** slot the shop shows (the Charakter tab can jump to the shop for an empty slot) */
+export const shopSlot = createStore<Slot>('weapon');
+
+// ---------------------------------------------------------------------------
+// Full-screen overlays that freeze the fight (chest opening)
+// ---------------------------------------------------------------------------
+export const fightBlockers = createStore(0);

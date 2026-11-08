@@ -4,6 +4,7 @@ import { dailyRowsForDay, habitsForDay } from '../game/selectors';
 import type { ReviewInput } from '../game/settlement';
 import { useDayLogs, useTasks } from '../state/hooks';
 import { Checkbox, PointsBadge } from '../ui/controls';
+import { PixelIcon } from '../ui/PixelIcon';
 import { Sheet } from '../ui/Sheet';
 
 interface Props {
@@ -52,8 +53,16 @@ export function ReviewDialog({ date, olderDays, onDone, onDismiss }: Props) {
 
   return (
     <Sheet
-      title="Was hast du gestern geschafft?"
-      subtitle={formatDateKey(date)}
+      className="yesterday"
+      title={
+        <>
+          <span className="yesterday-overline">
+            <PixelIcon name="moon" size={14} /> Rückblick auf gestern
+          </span>
+          Was hast du gestern geschafft?
+        </>
+      }
+      subtitle={`Gestern · ${formatDateKey(date)}`}
       onDismiss={dismiss}
       footer={
         <button className="btn btn-primary btn-block" onClick={submit} disabled={busy}>

@@ -7,12 +7,30 @@ import { isExhausted } from '../game/resources';
 import { areaDef, areaLabel } from '../game/world';
 import { useEquippedItems, usePlayer, useSettings } from '../state/hooks';
 import { useStore } from '../state/store';
-import { activeTab, eventQueue, flow } from '../state/ui';
+import type { StagePosition } from '../game/types';
+import { activeTab, eventQueue, fightBlockers, flow, pushEvents } from '../state/ui';
 import { formatNumber } from '../ui/combatText';
 import { PixelIcon } from '../ui/PixelIcon';
 import { gearOf } from './assets/catalog';
 import { battleHud, battleInput, battleTimer, type BattleBanner } from './bridge';
 import type { BattleGameHandle } from './game';
+
+/** a chest from a boss opens after the gold banner has been visible for a moment */
+const CHEST_DROP_DELAY_MS = 1600;
+
+/** stores a won fight; a chest dropped by a boss is shown as popup (item is already in the inventory) */
+async function saveVictory(pos: StagePosition) {
+  const r = await recordVictory(pos);
+  const drop = r?.reward?.drop;
+  if (r && drop) {
+    const current = r.dropCurrent;
+    window.setTimeout(
+      () => pushEvents([{ type: 'chestDrop', chest: drop.chest, item: drop.item, current }]),
+      CHEST_DROP_DELAY_MS,
+    );
+  }
+  return r;
+}
 
 /** Top area: Phaser canvas + HTML overlays (labels, timer, banner, hint) */
 export function BattleView() {
@@ -21,6 +39,7 @@ export function BattleView() {
   const equipped = useEquippedItems(player);
   const phase = useStore(flow).phase;
   const queued = useStore(eventQueue).length;
+  const blockers = useStore(fightBlockers);
   const hud = useStore(battleHud);
   const hostRef = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
@@ -34,9 +53,9 @@ export function BattleView() {
       position: { round: player.round, area: player.area, stage: player.stage },
       hero: stats,
       gear,
-      paused: phase !== 'main' || queued > 0,
+      paused: phase !== 'main' || queued > 0 || blockers > 0,
     });
-  }, [player, stats, gear, phase, queued]);
+  }, [player, stats, gear, phase, queued, blockers]);
 
   // mount the game once (engine is loaded lazily)
   useEffect(() => {
@@ -46,7 +65,7 @@ export function BattleView() {
       try {
         const { createBattleGame } = await import('./game');
         if (cancelled || !hostRef.current) return;
-        handle = createBattleGame(hostRef.current, { onVictory: recordVictory });
+        handle = createBattleGame(hostRef.current, { onVictory: saveVictory });
       } catch (err) {
         console.error('Kampfszene konnte nicht starten', err);
         if (!cancelled) setFailed(true);
@@ -85,7 +104,12 @@ export function BattleView() {
           {hud.enemyName && <div className={`battle-name foe display ${hud.kind}`}>{hud.enemyName}</div>}
           {exhausted && <div className="battle-name hero display exhausted-label">Erschöpft</div>}
           {hud.banner && <Banner key={hud.banner.id} banner={hud.banner} />}
-          {offsetDays !== 0 && <div className="dev-chip display">DEV +{offsetDays} T</div>}
+          {(import.meta.env.DEV || offsetDays !== 0) && (
+            // PC test version (dev server) must be recognisable next to the installed online app
+            <div className={`dev-chip display ${import.meta.env.DEV ? 'pc' : ''}`}>
+              {[import.meta.env.DEV && 'PC-Test', offsetDays !== 0 && `DEV +${offsetDays} T`].filter(Boolean).join(' · ')}
+            </div>
+          )}
         </>
       )}
       {failed && <div className="battle-note">Kampfszene konnte nicht geladen werden.</div>}
@@ -155,6 +179,7 @@ function SoundButton({ enabled, volume }: { enabled: boolean; volume: number }) 
 const BANNER_MS: Record<BattleBanner['kind'], number> = {
   boss: 2000,
   areaBoss: 2000,
+  reward: 2200,
   cleared: 2700,
   area: 3600,
   round: 4200,

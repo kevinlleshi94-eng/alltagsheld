@@ -9,6 +9,8 @@
  * Sprites (Phase 3): hero and enemies are composed at runtime from LPC layers and
  * monster sheets (assets/compose.ts). Until a sprite is ready – or if it cannot be
  * loaded – the old pixel placeholders from sprites.ts stand in.
+ *
+ * Phase 4: epic / legendary equipment gives the hero rising sparkles in the rarity colour.
  */
 import * as Phaser from 'phaser';
 import { playSfx } from '../audio/sfx';
@@ -22,15 +24,17 @@ import {
   type FightEvent,
   type FightResult,
   type FightState,
-  type VictoryResult,
 } from '../game/combat';
-import type { StagePosition } from '../game/types';
+import type { VictoryOutcome } from '../game/bossRewards';
+import { bestRarity } from '../game/shop';
+import type { Rarity, StagePosition } from '../game/types';
 import { areaDef, type AreaDef, type EnemyDef } from '../game/world';
 import { ENEMY_SPRITES, heroLook, lookKey } from './assets/catalog';
 import { composeCharacter, composeMonster, type AnimName, type ComposedSprite } from './assets/compose';
 import * as bg from './backgrounds';
 import { battleHud, battleInput, battleTimer, samePosition, type BattleCallbacks, type BattleInput } from './bridge';
 import * as art from './sprites';
+import { RARITY_COLORS } from '../ui/labels';
 
 type Phase = 'waiting' | 'walkIn' | 'intro' | 'fight' | 'victory' | 'retreat' | 'transition' | 'exit' | 'areaHold';
 type Who = 'hero' | 'foe';
@@ -97,7 +101,7 @@ export class BattleScene extends Phaser.Scene {
   /** HP shown in the bars (updated when a hit lands) */
   private shownHp: Record<Who, number> = { hero: 1, foe: 1 };
   private attempts = 0;
-  private victory: { done: boolean; result: VictoryResult | null } | null = null;
+  private victory: { done: boolean; result: VictoryOutcome | null } | null = null;
   /** where the DB has (or will have) the hero */
   private expected: StagePosition | null = null;
   private prevInputPos: StagePosition | null = null;
@@ -128,6 +132,10 @@ export class BattleScene extends Phaser.Scene {
   private fighters!: Record<Who, Fighter>;
   private overlay!: Phaser.GameObjects.Graphics;
   private sparks!: Phaser.GameObjects.Particles.ParticleEmitter;
+  /** sparkles around the hero (epic / legendary equipment) */
+  private aura!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private auraRarity: Rarity | null = null;
+  private auraZone = '';
   private webgl = false;
 
   // sprites
@@ -174,6 +182,17 @@ export class BattleScene extends Phaser.Scene {
         emitting: false,
       })
       .setDepth(7);
+    this.aura = this.add
+      .particles(0, 0, 'px', {
+        lifespan: { min: 700, max: 1200 },
+        speedY: { min: -26, max: -10 },
+        speedX: { min: -5, max: 5 },
+        scale: { start: 1.5, end: 0.5 },
+        alpha: { start: 1, end: 0.1 },
+        frequency: 120,
+        emitting: false,
+      })
+      .setDepth(6);
 
     this.layout();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
@@ -263,10 +282,12 @@ export class BattleScene extends Phaser.Scene {
     this.paused = input.paused;
     this.tweens.timeScale = input.paused ? 0 : 1;
     if (this.sparks) this.sparks.timeScale = input.paused ? 0 : 1;
+    if (this.aura) this.aura.timeScale = input.paused ? 0 : 1;
     for (const f of Object.values(this.fighters)) f.img.anims.timeScale = input.paused ? 0 : 1;
     this.fx.classList.toggle('paused', input.paused);
 
     this.applyHeroLook();
+    this.applyAura();
 
     const changed = !this.prevInputPos || !samePosition(this.prevInputPos, input.position);
     this.prevInputPos = { ...input.position };
@@ -285,6 +306,22 @@ export class BattleScene extends Phaser.Scene {
     if (this.phase === 'victory' || this.phase === 'transition' || this.phase === 'exit' || this.phase === 'areaHold')
       this.externalPending = true;
     else this.fadeTo(input.position);
+  }
+
+  /** epic / legendary equipment: sparkles in the rarity colour */
+  private applyAura() {
+    if (!this.latest || !this.aura) return;
+    const best = bestRarity(Object.values(this.latest.gear).map((rarity) => (rarity ? { rarity } : null)));
+    const rarity = best === 'epic' || best === 'legendary' ? best : null;
+    if (rarity === this.auraRarity) return;
+    this.auraRarity = rarity;
+    if (!rarity) {
+      this.aura.stop();
+      return;
+    }
+    this.aura.setParticleTint(Phaser.Display.Color.HexStringToColor(RARITY_COLORS[rarity]).color);
+    this.aura.frequency = rarity === 'legendary' ? 80 : 120;
+    this.aura.start();
   }
 
   /** equipment is visible on the hero (new look as soon as it is composed) */
@@ -420,7 +457,7 @@ export class BattleScene extends Phaser.Scene {
         ease: 'Quad.easeIn',
       });
       // persist right away; the next encounter waits for it
-      const v: { done: boolean; result: VictoryResult | null } = { done: false, result: null };
+      const v: { done: boolean; result: VictoryOutcome | null } = { done: false, result: null };
       this.victory = v;
       this.cb
         .onVictory(pos)
@@ -442,7 +479,7 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  private afterVictory(result: VictoryResult | null) {
+  private afterVictory(result: VictoryOutcome | null) {
     if (this.externalPending || !result) {
       // moved by something else meanwhile (or not saved) → follow the DB state
       if (!this.externalPending) this.expected = { ...(this.latest?.position ?? this.pos!) };
@@ -452,6 +489,10 @@ export class BattleScene extends Phaser.Scene {
     }
     const next = { round: result.player.round, area: result.player.area, stage: result.player.stage };
     this.expected = next;
+    // boss beaten for the first time: gold (+ maybe a chest, shown as popup by React) – feedback Phase 4
+    const reward = result.reward;
+    const rewardText = reward ? `+${reward.gold} Gold${reward.drop ? ' · Truhe gefunden!' : ''}` : undefined;
+    if (reward) playSfx('bossReward');
     if (result.areaCleared) {
       // hero walks off to the right, then the area transition starts
       playSfx('areaCleared');
@@ -465,10 +506,16 @@ export class BattleScene extends Phaser.Scene {
           id: ++bannerId,
           kind: 'cleared',
           title: result.roundCleared ? 'Der Drache ist besiegt!' : 'Gebiet geschafft!',
-          subtitle: areaDef(this.pos!.area).name,
+          subtitle: rewardText ? `${areaDef(this.pos!.area).name} · ${rewardText}` : areaDef(this.pos!.area).name,
         },
       }));
       return;
+    }
+    if (rewardText) {
+      battleHud.set((h) => ({
+        ...h,
+        banner: { id: ++bannerId, kind: 'reward', overline: 'Boss besiegt!', title: rewardText },
+      }));
     }
     this.startEncounter(next);
   }
@@ -589,7 +636,11 @@ export class BattleScene extends Phaser.Scene {
     if (!entry) return null;
     const key = `foe:${def.id}`;
     if (entry.kind === 'lpc') return { key, make: () => composeCharacter(entry.look, 'left') };
-    return { key, make: () => composeMonster(entry.id, entry.recolor ? def.colors : undefined) };
+    return {
+      key,
+      make: () =>
+        composeMonster(entry.id, entry.recolor ? def.colors : undefined).then((s) => ({ ...s, scale: s.scale * (entry.scale ?? 1) })),
+    };
   }
 
   private preloadEnemy(def: EnemyDef) {
@@ -736,6 +787,19 @@ export class BattleScene extends Phaser.Scene {
     hero.img.setPosition(this.fighterX('hero') + this.offset('hero') + this.nudge('hero'), feet - heroBob);
     this.flash('hero');
     if (this.phase === 'retreat') hero.img.setAlpha(1 - Math.min(1, this.phaseT / BALANCE.combat.retreatSec) * 0.6);
+    if (this.auraRarity) {
+      // sparkles start anywhere on the hero's body
+      const w = Math.max(8, Math.round(this.fighterWidth('hero') * 0.6));
+      const h = Math.max(12, Math.round(this.fighterHeight('hero') * 0.85));
+      const zone = `${w}x${h}`;
+      if (zone !== this.auraZone) {
+        this.auraZone = zone;
+        this.aura.clearEmitZones();
+        this.aura.addEmitZone({ type: 'random', source: new Phaser.Geom.Rectangle(-w / 2, -h, w, h) } as Phaser.Types.GameObjects.Particles.ParticleEmitterRandomZoneConfig);
+      }
+      this.aura.setPosition(hero.img.x, feet - heroBob);
+      this.aura.setVisible(hero.img.visible && hero.img.alpha > 0.5);
+    }
 
     // enemy
     if (foe.img.visible) {

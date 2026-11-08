@@ -88,7 +88,8 @@ export function defaultSettings(): Settings {
     id: 'settings',
     soundEnabled: true,
     volume: 0.7,
-    todayPromptEnabled: true,
+    // user feedback: only the review of yesterday on the first open of a day, no "today" prompt
+    todayPromptEnabled: false,
     devTimeOffsetMs: 0,
   };
 }

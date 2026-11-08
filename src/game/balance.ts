@@ -84,6 +84,8 @@ export const BALANCE = {
     speedFactorPerPoint: 0.06,
     minAttackIntervalSec: 0.25,
     critChance: 0.1,
+    /** base + Krit-Chance from shields is capped here */
+    maxCritChance: 0.6,
     critMultiplier: 1.5,
     /** random spread of every hit (±) */
     damageVariance: 0.1,
@@ -94,11 +96,15 @@ export const BALANCE = {
     areaCount: 8,
     fightTimerSec: 10,
     bossEveryNStages: 10,
-    /** all fights last at most 10 s (user feedback) – boss HP multipliers are tuned for that */
-    bossHpMultiplier: 2,
+    /**
+     * all fights last at most 10 s (user feedback). Feedback Phase 4: Zwischenboss 10 after 3–4 days, boss 20 after
+     * 8–9 days for the user's volume (15 dailies + 10 habits) → bosses ×3, area bosses ×2.5 (they are
+     * at stage 25 and grow with the stage, so they still hit hardest). See BALANCING.md.
+     */
+    bossHpMultiplier: 3,
     bossDamageMultiplier: 1.5,
     bossTimerSec: 10,
-    areaBossHpMultiplier: 3,
+    areaBossHpMultiplier: 2.5,
     areaBossDamageMultiplier: 1.5,
     areaBossTimerSec: 10,
     failHintAfterAttempts: 3,
@@ -114,17 +120,17 @@ export const BALANCE = {
    *   areaScale = (1 + areaGrowthLinear × a) × (1 + areaGrowthExponential)^a
    * a = area index across rounds (Straße R1 = 0, Vulkan R1 = 7, Straße R2 = 8 …).
    * Each new area starts easier than the previous boss, the wall forms inside the area.
-   * Start (feedback iPhone test): a new hero gets to stage 9, the boss at stage 10 stops him;
-   * 1 point rarely, 2 points reliably beat it. Higher base HP, flatter area growth → late game unchanged.
+   * Start (feedback Phase 4, user volume 35 points/day): a new hero gets to stage 9, the boss at stage 10
+   * needs level 5 + the first chests (day 3), boss 20 level 8 (day 9), Straße done on day ~12, dragon after ~5–6 months.
    */
   enemies: {
     baseHp: 56,
     baseDamage: 6,
     baseAttackIntervalSec: 1.5,
-    stageHpGrowth: 0.04,
-    stageDamageGrowth: 0.04,
+    stageHpGrowth: 0.07,
+    stageDamageGrowth: 0.07,
     areaHpGrowthLinear: 0,
-    areaHpGrowthExponential: 0.36,
+    areaHpGrowthExponential: 0.44,
     areaDamageGrowthLinear: 0,
     areaDamageGrowthExponential: 0.12,
   },
@@ -138,12 +144,12 @@ export const BALANCE = {
     caster: { hp: 0.8, damage: 1.6, interval: 1.25 },
   },
 
-  /** Equipment (stats used in combat now, shop UI in Phase 4) */
+  /** Equipment and chests. Prices ×2.5 after the feedback to Phase 4 (2–3 chests until the first boss) */
   items: {
     chests: {
-      wood: { price: 100, odds: [70, 25, 5, 0, 0] },
-      iron: { price: 400, odds: [35, 40, 20, 4.5, 0.5] },
-      gold: { price: 1500, odds: [10, 35, 40, 13, 2] },
+      wood: { price: 250, odds: [70, 25, 5, 0, 0] },
+      iron: { price: 1000, odds: [35, 40, 20, 4.5, 0.5] },
+      gold: { price: 3750, odds: [10, 35, 40, 13, 2] },
     },
     /** common, uncommon, rare, epic, legendary */
     rarityFactors: [1, 1.5, 2.2, 3.2, 5],
@@ -153,11 +159,36 @@ export const BALANCE = {
     levelFactor: 0.12,
     /** ± random spread */
     spread: 0.15,
-    /** chance that a helmet also gives Angriffsgeschwindigkeit */
-    headSpeedChance: 0.35,
-    /** epic/legendary second bonus as fraction of the main budget */
-    secondBonusFraction: 0.5,
+    /**
+     * Slot rules (user feedback Phase 4): weapon → Stärke (some also Tempo), helmet → only Tempo,
+     * body → only Leben, shield → Leben + Krit-Chance.
+     */
+    weaponSpeedChance: 0.4,
+    /** share of the budget that goes to Tempo on such a weapon */
+    weaponSpeedShare: 0.3,
+    /** share of a shield's budget that becomes Krit-Chance (rest = Leben) */
+    shieldCritShare: 0.4,
+    /** 1 budget point = this many percent points Krit-Chance */
+    critPercentPerPoint: 2,
+    /** epic/legendary: extra budget on the slot's own values (no foreign bonus any more) */
+    highRarityBonus: 0.5,
     sellFraction: 0.25,
+  },
+
+  /**
+   * Boss rewards (user feedback Phase 4): gold for Zwischenbosse (stage 10/20) and Gebietsbosse (25),
+   * sometimes a chest. Only for the FIRST victory over that boss – after a death the hero starts at the
+   * area start again and must not farm the same bosses.
+   */
+  bossRewards: {
+    goldBoss: 60,
+    goldAreaBoss: 150,
+    /** × per area, counted over all rounds (Straße R1 = 0 … Vulkan R1 = 7, Straße R2 = 8) */
+    goldGrowthPerArea: 1.3,
+    chestBoss: { chance: 0.15, chest: 'wood' as const },
+    chestAreaBoss: { chance: 0.35, chest: 'iron' as const },
+    /** the dragon (area boss of the last area) always drops a gold chest */
+    chestDragon: { chance: 1, chest: 'gold' as const },
   },
 
   /** Balancing simulation (npm run simulate) */

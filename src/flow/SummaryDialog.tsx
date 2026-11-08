@@ -14,8 +14,8 @@ export function SummaryDialog({ result, onClose }: { result: SettlementOutcome; 
 
   return (
     <Modal
-      title="Tagesabrechnung"
-      className="summary-modal"
+      title="Abrechnung für gestern"
+      className="summary-modal yesterday"
       actions={
         <button className="btn btn-primary btn-block" onClick={onClose}>
           Weiter

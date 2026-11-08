@@ -1,5 +1,6 @@
 import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { PixelIcon } from './PixelIcon';
+import { Portal } from './Portal';
 
 interface SheetProps {
   title: ReactNode;
@@ -37,40 +38,42 @@ export function Sheet({ title, subtitle, onDismiss, footer, children, size = 'fu
   };
 
   return (
-    <div className="sheet-backdrop" style={{ opacity: Math.max(0.3, 1 - drag / 400) }}>
-      <div
-        className={`sheet sheet-${size} ${className ?? ''}`}
-        style={{ transform: drag ? `translateY(${drag}px)` : undefined, transition: drag ? 'none' : undefined }}
-        role="dialog"
-        aria-modal="true"
-      >
+    <Portal>
+      <div className="sheet-backdrop" style={{ opacity: Math.max(0.3, 1 - drag / 400) }}>
         <div
-          className="sheet-header"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+          className={`sheet sheet-${size} ${className ?? ''}`}
+          style={{ transform: drag ? `translateY(${drag}px)` : undefined, transition: drag ? 'none' : undefined }}
+          role="dialog"
+          aria-modal="true"
         >
-          {onDismiss && <div className="sheet-grabber" aria-hidden />}
-          <div className="sheet-titles">
-            <h2 className="display">{title}</h2>
-            {subtitle && <div className="sheet-subtitle">{subtitle}</div>}
+          <div
+            className="sheet-header"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+          >
+            {onDismiss && <div className="sheet-grabber" aria-hidden />}
+            <div className="sheet-titles">
+              <h2 className="display">{title}</h2>
+              {subtitle && <div className="sheet-subtitle">{subtitle}</div>}
+            </div>
+            {onDismiss && (
+              <button
+                className="icon-btn sheet-close"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={onDismiss}
+                aria-label="Schließen"
+              >
+                <PixelIcon name="close" size={14} />
+              </button>
+            )}
           </div>
-          {onDismiss && (
-            <button
-              className="icon-btn sheet-close"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={onDismiss}
-              aria-label="Schließen"
-            >
-              <PixelIcon name="close" size={14} />
-            </button>
-          )}
+          <div className="sheet-body">{children}</div>
+          {footer && <div className="sheet-footer">{footer}</div>}
         </div>
-        <div className="sheet-body">{children}</div>
-        {footer && <div className="sheet-footer">{footer}</div>}
       </div>
-    </div>
+    </Portal>
   );
 }
 
@@ -86,13 +89,15 @@ interface ModalProps {
 /** Small centred dialog */
 export function Modal({ title, children, actions, className, effect }: ModalProps) {
   return (
-    <div className="modal-backdrop">
-      {effect}
-      <div className={`modal ${className ?? ''}`} role="dialog" aria-modal="true">
-        {title && <h2 className="display modal-title">{title}</h2>}
-        <div className="modal-body">{children}</div>
-        <div className="modal-actions">{actions}</div>
+    <Portal>
+      <div className="modal-backdrop">
+        {effect}
+        <div className={`modal ${className ?? ''}`} role="dialog" aria-modal="true">
+          {title && <h2 className="display modal-title">{title}</h2>}
+          <div className="modal-body">{children}</div>
+          <div className="modal-actions">{actions}</div>
+        </div>
       </div>
-    </div>
+    </Portal>
   );
 }

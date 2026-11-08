@@ -5,7 +5,8 @@
  *  React → scene:  battleInput (position, hero stats, visible equipment, paused)
  *  scene → React:  battleHud (enemy name, attempts, banner), battleTimer (10 Hz)
  */
-import type { HeroStats, StageKind, VictoryResult } from '../game/combat';
+import type { VictoryOutcome } from '../game/bossRewards';
+import type { HeroStats, StageKind } from '../game/combat';
 import type { Rarity, Slot, StagePosition } from '../game/types';
 import { createStore } from '../state/store';
 
@@ -23,7 +24,7 @@ export const battleInput = createStore<BattleInput | null>(null);
 export interface BattleBanner {
   id: number;
   /** cleared = "Gebiet geschafft!", area/round = name of the new area on black */
-  kind: 'boss' | 'areaBoss' | 'cleared' | 'area' | 'round';
+  kind: 'boss' | 'areaBoss' | 'cleared' | 'area' | 'round' | 'reward';
   title: string;
   subtitle?: string;
   /** small line above the title */
@@ -50,7 +51,7 @@ export const battleTimer = createStore<BattleTimer>({ active: false, left: 0, to
 
 export interface BattleCallbacks {
   /** persist a won fight; resolves with the new state (null if the hero had moved) */
-  onVictory(pos: StagePosition): Promise<VictoryResult | null>;
+  onVictory(pos: StagePosition): Promise<VictoryOutcome | null>;
 }
 
 export const samePosition = (a: StagePosition, b: StagePosition) =>

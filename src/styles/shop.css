@@ -1,0 +1,590 @@
+/* Shop, chests, items (Phase 4). Rarity colours come from TS (labels.ts) as --rarity / --rarity-light / --rarity-ray. */
+
+.gold-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 17px;
+  color: var(--gold);
+}
+
+.shop-intro {
+  margin: 0 2px 8px;
+  font: 600 15px var(--display);
+}
+
+/* slot choice as picture tiles (feedback Phase 4: „Kopf/Körper“ was unclear) */
+.slot-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.slot-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 7px 3px 6px;
+  background: var(--panel);
+  border: 2px solid var(--border-dark);
+  border-radius: 5px;
+  color: var(--muted);
+}
+
+.slot-tile.empty .item-icon {
+  opacity: 0.45;
+}
+
+.slot-tile.active {
+  background: var(--panel3);
+  border-color: var(--gold);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--gold) inset;
+}
+
+.slot-tile-name {
+  font-size: 15px;
+}
+
+.slot-tile.active .slot-tile-name {
+  color: var(--gold);
+}
+
+.slot-tile-stats {
+  font: 500 11px var(--display);
+  line-height: 1.15;
+  text-align: center;
+}
+
+.shop-current {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-height: 30px;
+  margin: 0 2px 10px;
+}
+
+.shop-current .item-icon {
+  padding: 1px;
+}
+
+.shop-current-name {
+  color: var(--rarity);
+  font-family: var(--display);
+  font-weight: 600;
+}
+
+/* --- chest cards ------------------------------------------------------------ */
+.card.chest-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.chest-thumb {
+  flex: none;
+  width: 52px;
+  display: flex;
+  justify-content: center;
+}
+
+.chest-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.chest-name {
+  font-size: 17px;
+}
+
+.odds-bar {
+  display: flex;
+  height: 10px;
+  background: var(--border-dark);
+  border: 2px solid var(--border-dark);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.odds-bar span {
+  background: var(--rarity);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.25);
+}
+
+.odds-text {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 9px;
+  font: 600 12px var(--display);
+}
+
+.odds-text span {
+  color: var(--rarity);
+}
+
+.chest-buy {
+  flex: none;
+  min-width: 80px;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 10px;
+}
+
+.chest-buy-label {
+  font-size: 13px;
+}
+
+.chest-buy-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 16px;
+}
+
+.rarity-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 12px;
+  margin-top: 10px;
+  font: 500 12px var(--display);
+  color: var(--muted);
+}
+
+.rarity-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  background: var(--rarity);
+  border: 1px solid var(--border-dark);
+}
+
+/* --- items ------------------------------------------------------------------ */
+.item-icon {
+  flex: none;
+  display: inline-flex;
+  padding: 3px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 2px solid var(--border-dark);
+  border-radius: 4px;
+  line-height: 0;
+}
+
+.item-icon.rarity-epic,
+.item-icon.rarity-legendary {
+  box-shadow: 0 0 8px var(--rarity);
+}
+
+.item-icon.empty-icon {
+  width: 46px;
+  height: 46px;
+  border-style: dashed;
+  border-color: var(--border);
+  background: transparent;
+}
+
+.item-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: var(--panel);
+  border: 2px solid var(--border-dark);
+  border-radius: 4px;
+  color: var(--text);
+  text-align: left;
+}
+
+.item-row:active {
+  background: var(--panel2);
+}
+
+.item-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.item-name {
+  color: var(--rarity);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* inventory filter (feedback Phase 4) */
+.inventory-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 4px 11px;
+  background: var(--panel);
+  border: 2px solid var(--border-dark);
+  border-radius: 17px;
+  font: 600 14px var(--display);
+  color: var(--muted);
+}
+
+.filter-chip.active {
+  background: var(--panel3);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.filter-chip:disabled {
+  opacity: 0.4;
+}
+
+.filter-count {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.inventory-empty {
+  margin: 4px 2px;
+}
+
+.equip-slot {
+  flex: none;
+  width: 50px;
+  font: 500 12px var(--display);
+  color: var(--muted);
+}
+
+.stat-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.stat-compare.compare .stat-line {
+  grid-template-columns: 1fr auto 52px;
+}
+
+.stat-value {
+  font-size: 16px;
+  text-align: right;
+}
+
+.stat-delta {
+  font: 600 13px var(--display);
+  text-align: right;
+}
+
+.stat-delta.up {
+  color: #7ee05e;
+}
+
+.stat-delta.down {
+  color: #ff8a7a;
+}
+
+.stat-delta.same {
+  color: var(--muted);
+}
+
+.stat-total {
+  margin-top: 2px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border);
+}
+
+.item-sheet-title {
+  color: var(--rarity);
+}
+
+.item-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.item-detail-stats {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.item-actions .btn {
+  flex: 1;
+}
+
+/* --- chest opening: wobble → pop → light beam → result ------------------------ */
+.chest-backdrop {
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(5, 3, 2, 0.88);
+  overflow: hidden;
+}
+
+.chest-scene {
+  position: relative;
+  flex: none;
+  width: 100%;
+  max-width: 400px;
+  height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.chest-sprite {
+  position: relative;
+  z-index: 2;
+  line-height: 0;
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.45));
+}
+
+.stage-shake .chest-sprite {
+  animation: chest-wobble 0.56s ease-in-out infinite;
+}
+
+.stage-open .chest-sprite {
+  animation: chest-pop 0.4s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+.chest-caption {
+  margin-top: 10px;
+  font-size: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.chest-overline {
+  margin-bottom: 2px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.chest-beam {
+  position: absolute;
+  left: 50%;
+  bottom: 50px;
+  z-index: 1;
+  width: 150px;
+  height: 330px;
+  margin-left: -75px;
+  background: linear-gradient(to top, var(--rarity-light) 0%, var(--rarity) 35%, transparent 100%);
+  clip-path: polygon(32% 100%, 68% 100%, 100% 0, 0 0);
+  opacity: 0.7;
+  transform-origin: 50% 100%;
+  pointer-events: none;
+  animation:
+    beam-up 0.45s ease-out both,
+    beam-pulse 1.8s ease-in-out 0.45s infinite;
+}
+
+.chest-flash {
+  position: absolute;
+  inset: -80px -40px;
+  background: radial-gradient(circle at 50% 75%, var(--rarity-light), transparent 55%);
+  opacity: 0;
+  pointer-events: none;
+  animation: chest-flash 0.9s ease-out;
+}
+
+.chest-rays {
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  width: 900px;
+  height: 900px;
+  margin: -450px 0 0 -450px;
+  background: repeating-conic-gradient(var(--rarity-ray) 0deg 8deg, transparent 8deg 20deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 50%);
+  mask-image: radial-gradient(circle, #000 0%, transparent 50%);
+  pointer-events: none;
+  animation:
+    rays-spin 18s linear infinite,
+    fade-in 0.8s ease-out;
+}
+
+.chest-spark {
+  position: absolute;
+  bottom: 60px;
+  width: 4px;
+  height: 4px;
+  background: var(--rarity-light);
+  box-shadow: 0 0 6px var(--rarity);
+  opacity: 0;
+  pointer-events: none;
+  animation: chest-spark 1.8s linear infinite;
+}
+
+.chest-item {
+  position: absolute;
+  left: 50%;
+  bottom: 104px;
+  z-index: 3;
+  transform: translateX(-50%);
+  animation:
+    item-rise 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.25) both,
+    item-float 2.2s ease-in-out 0.6s infinite;
+}
+
+.chest-item .item-icon {
+  background: rgba(0, 0, 0, 0.45);
+  border-color: var(--rarity);
+  box-shadow: 0 0 22px var(--rarity);
+}
+
+.chest-result {
+  text-align: center;
+}
+
+.chest-result.rare {
+  border-color: var(--rarity);
+  box-shadow:
+    0 0 0 2px var(--rarity) inset,
+    0 0 50px var(--rarity-ray);
+}
+
+.chest-rarity {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rarity);
+}
+
+.chest-item-name {
+  margin: 2px 0 12px;
+  font-size: 22px;
+  color: var(--rarity);
+}
+
+.chest-result .stat-compare {
+  text-align: left;
+  margin-bottom: 8px;
+}
+
+@keyframes chest-wobble {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(-7deg) translateY(-3px);
+  }
+  40% {
+    transform: rotate(6deg);
+  }
+  60% {
+    transform: rotate(-4deg) translateY(-4px);
+  }
+  80% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes chest-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.2, 0.86);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes chest-flash {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes beam-up {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+}
+
+@keyframes beam-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes chest-spark {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-230px);
+    opacity: 0;
+  }
+}
+
+@keyframes item-rise {
+  from {
+    transform: translate(-50%, 80px) scale(0.3);
+    opacity: 0;
+  }
+}
+
+@keyframes item-float {
+  50% {
+    transform: translate(-50%, -7px);
+  }
+}
+
+/* iOS „Bewegung reduzieren“: no wobble, but the reveal stays visible as fades */
+@media (prefers-reduced-motion: reduce) {
+  .chest-beam,
+  .chest-item,
+  .chest-rays {
+    animation: fade-in 0.4s ease-out both !important;
+  }
+
+  .chest-flash {
+    animation: chest-flash 0.9s ease-out !important;
+  }
+
+  .chest-spark,
+  .aura-spark {
+    display: none;
+  }
+}

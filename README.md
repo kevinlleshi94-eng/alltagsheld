@@ -3,7 +3,7 @@
 Private Habit-Tracking-App mit Fantasy-Auto-Battler. Echte Aufgaben erledigen → abhaken → XP & Gold → der Held wird stärker.
 Läuft als PWA auf dem iPhone, alle Daten bleiben lokal auf dem Gerät.
 
-> Aktueller Stand: **Phase 3 – Grafik** (Version 0.3.0). Aufgaben, Abrechnung und Auto-Battler laufen, Held und Gegner haben echte Pixel-Sprites (LPC / OpenGameArt, siehe CREDITS.md). Shop & Ausrüstung folgen in Phase 4.
+> Aktueller Stand: **Phase 4 – Shop & Ausrüstung** (Version 0.4.1, mit Feedback-Runde). Aufgaben, Abrechnung und Auto-Battler laufen, Held und Gegner haben echte Pixel-Sprites (LPC / OpenGameArt, siehe CREDITS.md). Gold kaufst du in Truhen um, Bosse geben beim ersten Sieg Gold und manchmal eine Truhe. Die Ausrüstung macht den Helden stärker und ist am Helden sichtbar. Streaks, Haustiere, Erfolge und Statistik folgen in Phase 5.
 
 ---
 
@@ -95,6 +95,7 @@ src/audio/     Soundeffekte (Web Audio, ohne Dateien)
 src/db/        IndexedDB (Dexie), Aktionen, Backup/Import, Migrationen
 src/flow/      Ablauf beim Öffnen: Rückblick „Gestern“, Abrechnung, „Heute“, Popups, Tod
 src/screens/   Bildschirme (Heute, Charakter, Shop, Statistik, Mehr …)
+src/shop/      Truhen-Öffnung, Gegenstands-Anzeigen, Pixel-Grafik für Truhen und Items
 src/ui/        wiederverwendbare Bausteine (Sheet, Buttons, Pixel-Icons …)
 src/state/     kleine Stores (Ereignis-Warteschlange, Navigation, Toasts) und Hooks
 ```

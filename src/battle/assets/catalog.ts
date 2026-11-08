@@ -461,10 +461,11 @@ export const MONSTERS: Record<MonsterId, MonsterSheet> = SHEETS;
 // ---------------------------------------------------------------------------
 
 export type EnemySprite =
-  | { kind: 'monster'; id: MonsterId; recolor?: boolean }
+  /** scale: extra size for this enemy (on top of the sheet scale; bosses still get ×2) */
+  | { kind: 'monster'; id: MonsterId; recolor?: boolean; scale?: number }
   | { kind: 'lpc'; look: CharacterLook };
 
-const m = (id: MonsterId, recolor = false): EnemySprite => ({ kind: 'monster', id, recolor });
+const m = (id: MonsterId, recolor = false, scale?: number): EnemySprite => ({ kind: 'monster', id, recolor, ...(scale ? { scale } : {}) });
 const c = (...look: CharacterLook): EnemySprite => ({ kind: 'lpc', look });
 
 const skeleton: CharacterLook = [{ part: 'bodySkeleton' }, { part: 'headSkeleton' }];
@@ -546,7 +547,8 @@ export const ENEMY_SPRITES: Record<string, EnemySprite> = {
     { part: 'longsword' },
   ),
   bogterror: m('flower', true),
-  hydra: m('snake', true),
+  // small sheets: bigger as area bosses (user feedback), total ×4 / ×3 stays pixel-exact
+  hydra: m('snake', true, 2),
   // Wüste
   scorpion: m('spider', true),
   scarab: m('beetle', true),
@@ -579,7 +581,7 @@ export const ENEMY_SPRITES: Record<string, EnemySprite> = {
     { part: 'saber' },
   ),
   // eye with tentacles
-  kraken: m('eyeball', true),
+  kraken: m('eyeball', true, 1.5),
   // Schnee
   icewolf: m('wolf', true),
   yeti: c({ part: 'bodyMuscular', color: 'fur_white' }, { part: 'headTroll', color: 'fur_white' }),

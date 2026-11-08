@@ -75,6 +75,17 @@ const ICONS = {
     '............',
     '............',
   ],
+  moon: [
+    '...####..',
+    '..####...',
+    '.####....',
+    '.###.....',
+    '.###.....',
+    '.###.....',
+    '.####....',
+    '..####...',
+    '...####..',
+  ],
   coin: [
     '..oooo..',
     '.o####o.',
@@ -197,6 +208,7 @@ export type IconName = keyof typeof ICONS;
 
 const DEFAULT_COLORS: Partial<Record<IconName, { main: string; dark: string; light: string }>> = {
   coin: { main: '#e8b33a', dark: '#8a5a12', light: '#fff1b8' },
+  moon: { main: '#f4e9b0', dark: '#8a8460', light: '#ffffff' },
   heart: { main: '#d6453d', dark: '#5e1410', light: '#ffb3a8' },
   sword: { main: '#c9d1d9', dark: '#c08a2a', light: '#ffffff' },
   bolt: { main: '#8fd0ff', dark: '#2a5a8a', light: '#ffffff' },

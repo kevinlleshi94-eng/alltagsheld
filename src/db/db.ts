@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import { BALANCE } from '../game/balance';
 import { stageIndex } from '../game/combat';
+import { convertLegacyItem } from '../game/items';
 import { initialProgress } from '../game/seed';
 import type { Achievement, DayLog, Item, Player, Settings, Task } from '../game/types';
 
@@ -10,7 +11,7 @@ import type { Achievement, DayLog, Item, Player, Settings, Task } from '../game/
  *  2. bump SCHEMA_VERSION
  *  3. add a step to `migrateSnapshot` in migrations.ts (for old backup files)
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 4;
 
 export class AlltagsheldDB extends Dexie {
   tasks!: Table<Task, string>;
@@ -39,6 +40,28 @@ export class AlltagsheldDB extends Dexie {
           .toCollection()
           .modify((p) => {
             p.progress ??= initialProgress(stageIndex(p, BALANCE));
+          }),
+      );
+    // v3: the "today" prompt on opening is off by default now (user feedback) – also for existing data
+    this.version(3)
+      .stores({})
+      .upgrade((tx) =>
+        tx
+          .table<Settings, string>('settings')
+          .toCollection()
+          .modify((s) => {
+            s.todayPromptEnabled = false;
+          }),
+      );
+    // v4: new item rules per slot (helmet → Tempo, body → Leben, shield → Leben + Krit) – same value, new split
+    this.version(4)
+      .stores({})
+      .upgrade((tx) =>
+        tx
+          .table<Item, string>('items')
+          .toCollection()
+          .modify((item, ref) => {
+            ref.value = convertLegacyItem(item, BALANCE);
           }),
       );
   }

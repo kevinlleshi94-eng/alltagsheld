@@ -19,6 +19,8 @@ export interface HeroStats extends FighterStats {
   /** attributes incl. equipment */
   attributes: Record<Attribute, number>;
   exhausted: boolean;
+  /** Krit-Chance from equipment, percent points */
+  critBonus: number;
 }
 
 export type StageKind = 'normal' | 'boss' | 'areaBoss';
@@ -42,21 +44,35 @@ export function effectiveAttributes(
   const out = { ...player.attributes };
   for (const item of equipped) {
     if (!item) continue;
-    for (const [k, v] of Object.entries(item.stats) as [Attribute, number][]) out[k] += v ?? 0;
+    for (const k of ATTRIBUTE_KEYS) out[k] += item.stats[k] ?? 0;
   }
   return out;
 }
 
-export function heroStatsFromAttributes(attrs: Record<Attribute, number>, exhausted: boolean, balance: Balance): HeroStats {
+const ATTRIBUTE_KEYS: Attribute[] = ['strength', 'speed', 'life'];
+
+/** extra Krit-Chance of the equipped items in percent points (shields) */
+export function gearCrit(equipped: ReadonlyArray<Pick<Item, 'stats'> | null | undefined>): number {
+  return equipped.reduce((sum, item) => sum + (item?.stats.crit ?? 0), 0);
+}
+
+/** `critBonus` = extra Krit-Chance from equipment in percent points */
+export function heroStatsFromAttributes(
+  attrs: Record<Attribute, number>,
+  exhausted: boolean,
+  balance: Balance,
+  critBonus = 0,
+): HeroStats {
   const c = balance.combat;
   const damage = (c.baseDamage + c.damagePerStrength * attrs.strength) * (exhausted ? balance.vitality.exhaustedDamageMultiplier : 1);
   return {
     attributes: attrs,
     exhausted,
+    critBonus,
     maxHp: Math.round(c.baseHp + c.hpPerLife * attrs.life),
     damage,
     attackInterval: Math.max(c.minAttackIntervalSec, c.baseAttackIntervalSec / (1 + c.speedFactorPerPoint * attrs.speed)),
-    critChance: c.critChance,
+    critChance: Math.min(c.maxCritChance, c.critChance + critBonus / 100),
     critMultiplier: c.critMultiplier,
   };
 }
@@ -66,7 +82,12 @@ export function heroStats(
   equipped: ReadonlyArray<Pick<Item, 'stats'> | null | undefined>,
   balance: Balance,
 ): HeroStats {
-  return heroStatsFromAttributes(effectiveAttributes(player, equipped), isExhausted(player as Player, balance), balance);
+  return heroStatsFromAttributes(
+    effectiveAttributes(player, equipped),
+    isExhausted(player as Player, balance),
+    balance,
+    gearCrit(equipped),
+  );
 }
 
 // ---------------------------------------------------------------------------

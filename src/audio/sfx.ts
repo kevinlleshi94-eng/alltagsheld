@@ -13,7 +13,11 @@ export type SfxName =
   | 'fightLost'
   | 'areaCleared'
   | 'levelUp'
-  | 'death';
+  | 'death'
+  | 'chestShake'
+  | 'chestOpen'
+  | 'chestRare'
+  | 'bossReward';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -175,6 +179,31 @@ const SOUNDS: Record<SfxName, (c: AudioContext) => void> = {
     notes(c, [330, 311, 294, 262], 0.22, { dur: 0.28, type: 'triangle', gain: 0.16 });
     tone(c, { freq: 131, to: 65, dur: 1.1, type: 'sawtooth', gain: 0.08, delay: 0.9 });
     noise(c, { dur: 0.6, gain: 0.08, freq: 300, type: 'lowpass', delay: 0.9 });
+  },
+  // chest wobbles: wooden knocks
+  chestShake: (c) => {
+    for (let i = 0; i < 3; i++) {
+      const v = vary();
+      noise(c, { dur: 0.05, gain: 0.16, freq: 650 * v, q: 2, delay: i * 0.12 });
+      tone(c, { freq: 150 * v, to: 90, dur: 0.06, type: 'triangle', gain: 0.16, delay: i * 0.12 });
+    }
+  },
+  // lid pops open + rising shimmer
+  chestOpen: (c) => {
+    noise(c, { dur: 0.14, gain: 0.22, freq: 500, to: 2600, q: 0.8 });
+    tone(c, { freq: 120, to: 60, dur: 0.14, type: 'triangle', gain: 0.24 });
+    notes(c, [784, 988, 1175, 1568], 0.05, { dur: 0.18, gain: 0.07, type: 'triangle', delay: 0.1 });
+  },
+  // epic / legendary item: small fanfare
+  chestRare: (c) => {
+    notes(c, [523, 659, 784, 1047, 1319], 0.07, { dur: 0.14, gain: 0.08 });
+    tone(c, { freq: 1568, dur: 0.7, type: 'triangle', gain: 0.06, delay: 0.38 });
+    tone(c, { freq: 2093, dur: 0.6, type: 'triangle', gain: 0.04, delay: 0.46 });
+  },
+  // boss reward: a few coins clinking
+  bossReward: (c) => {
+    notes(c, [1319, 1568, 1319, 1976], 0.06, { dur: 0.09, gain: 0.07, type: 'square', delay: 0.15 });
+    tone(c, { freq: 2637, dur: 0.25, type: 'triangle', gain: 0.04, delay: 0.42 });
   },
 };
 
