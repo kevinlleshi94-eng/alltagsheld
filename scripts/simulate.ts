@@ -4,7 +4,15 @@
  */
 import { BALANCE } from '../src/game/balance';
 import { positionFromIndex } from '../src/game/combat';
-import { median, simulateDetailed, type SimConfig, type SimResult } from '../src/game/simulation';
+import {
+  median,
+  simulateDetailed,
+  USER_DAILIES,
+  USER_MINUS_HABITS,
+  USER_PLUS_HABITS,
+  type SimConfig,
+  type SimResult,
+} from '../src/game/simulation';
 import { areaName } from '../src/game/world';
 
 const args = Object.fromEntries(
@@ -19,14 +27,16 @@ const markdown = args.markdown === 'true';
 const checkpoints = [1, 7, 30, 90, 180, 270, 365].filter((d) => d <= days);
 if (!checkpoints.includes(days)) checkpoints.push(days);
 
-type Scenario = { label: string } & Pick<SimConfig, 'fulfillment' | 'missedPerDay' | 'habitMinusPerDay' | 'profile'>;
-/** the user's volume (15 dailies + 10 habits) at several fulfilment levels + the "5 missed + 2× −" scenario */
+type Scenario = { label: string; milestones?: boolean } & Pick<SimConfig, 'fulfillment' | 'missedPerDay' | 'habitMinusPerDay' | 'profile'>;
+/** the user's tasks (13 dailies, 4 "+" / 3 "−" habits) at several fulfilment levels + bad scenarios (feedback v0.5) */
 const scenarios: Scenario[] = [
-  { label: '100 %', fulfillment: 1 },
-  { label: '90 %', fulfillment: 0.9 },
-  { label: '80 %', fulfillment: 0.8 },
+  { label: '100 %', fulfillment: 1, milestones: true },
+  { label: '90 %', fulfillment: 0.9, milestones: true },
+  { label: '80 %', fulfillment: 0.8, milestones: true },
+  { label: '65 %', fulfillment: 0.65, milestones: true },
   { label: '50 %', fulfillment: 0.5 },
-  { label: '5 verpasst + 2× „−“ (Startaufgaben)', fulfillment: 0.6, missedPerDay: 5, habitMinusPerDay: 2, profile: 'seed' },
+  { label: '30 % (schlechte Phase)', fulfillment: 0.3 },
+  { label: '5 verpasst + 2× „−“', fulfillment: 0.6, missedPerDay: 5, habitMinusPerDay: 2 },
 ];
 
 const fmtStage = (index: number) => {
@@ -40,7 +50,7 @@ const milestoneRows: Row[] = [];
 const started = Date.now();
 
 for (const sc of scenarios) {
-  const { label, ...cfg } = sc;
+  const { label, milestones: _m, ...cfg } = sc;
   const runs: SimResult[] = [];
   for (let s = 0; s < seeds; s++) runs.push(simulateDetailed({ ...cfg, days, seed: 1000 + s, balance: BALANCE, checkpoints }));
   for (let ci = 0; ci < checkpoints.length; ci++) {
@@ -63,8 +73,8 @@ for (const sc of scenarios) {
       Drache: dragonDays.length ? `Tag ${median(dragonDays)} (${dragonDays.length}/${seeds})` : '–',
     });
   }
-  // milestones: first victory over the bosses of round 1 (only for the user profile)
-  if (!cfg.profile) {
+  // milestones: first victory over the bosses of round 1
+  if (sc.milestones) {
     const goals: [number, number, string][] = [
       [1, 10, 'Boss Stufe 10'],
       [1, 20, 'Boss Stufe 20'],
@@ -110,7 +120,7 @@ function print(table: Row[]) {
 
 console.log('Verlauf\n');
 print(rows);
-console.log('\nMeilensteine (dein Profil: 15 Aufgaben mit 25 Punkten + 10 Gewohnheiten)\n');
+console.log(`\nMeilensteine (dein Profil: ${USER_DAILIES} Aufgaben + ${USER_PLUS_HABITS}/${USER_MINUS_HABITS} Gewohnheiten +/−)\n`);
 print(milestoneRows);
 console.log(
   `\n${seeds} Durchläufe je Szenario (Median), App-Zeit ${BALANCE.simulation.appSecondsPerDay} s/Tag · ${((Date.now() - started) / 1000).toFixed(1)} s`,

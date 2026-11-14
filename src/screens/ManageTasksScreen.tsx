@@ -24,7 +24,8 @@ import { guarded } from '../state/actions';
 import { useTasks } from '../state/hooks';
 import { toast } from '../state/ui';
 import { useConfirm } from '../ui/Confirm';
-import { PointsBadge, Section, Stepper } from '../ui/controls';
+import { BALANCE } from '../game/balance';
+import { PointsBadge, Section, Stepper, Toggle } from '../ui/controls';
 import { PixelIcon } from '../ui/PixelIcon';
 import { Sheet } from '../ui/Sheet';
 
@@ -95,11 +96,12 @@ export function ManageTasksScreen() {
   );
 }
 
+/** v0.5: dailies and "+" have no points any more (every task is worth the same) – only "−" keeps its strength */
 function TaskPoints({ task }: { task: Task }) {
-  if (task.type === 'daily') return <PointsBadge points={task.points} />;
+  if (task.type === 'daily') return null;
   return (
     <span className="badges">
-      {task.plusPoints > 0 && <PointsBadge points={task.plusPoints} sign="+" />}
+      {task.plusPoints > 0 && <span className="points-badge">+</span>}
       {task.minusPoints > 0 && <PointsBadge points={task.minusPoints} sign="−" />}
     </span>
   );
@@ -231,21 +233,25 @@ function TaskEditor({ state, onClose }: { state: NonNullable<EditorState>; onClo
       </label>
 
       {!isHabit ? (
-        <div className="field-row">
-          <span>Punkte</span>
-          <Stepper value={draft.points} min={1} max={10} onChange={(points) => setDraft({ ...draft, points })} />
-        </div>
+        <p className="muted small">
+          Alle täglichen Aufgaben sind gleich viel wert: Zusammen bringen sie immer gleich viel XP und Gold, egal wie viele
+          es sind.
+        </p>
       ) : (
         <>
+          <Toggle
+            checked={draft.plusPoints > 0}
+            onChange={(on) => setDraft({ ...draft, plusPoints: on ? 1 : 0 })}
+            label="Plus-Button (gute Gewohnheit)"
+          />
           <div className="field-row">
-            <span>Plus-Punkte</span>
-            <Stepper value={draft.plusPoints} min={0} max={10} onChange={(plusPoints) => setDraft({ ...draft, plusPoints })} />
-          </div>
-          <div className="field-row">
-            <span>Minus-Punkte</span>
+            <span>Minus-Stärke</span>
             <Stepper value={draft.minusPoints} min={0} max={10} onChange={(minusPoints) => setDraft({ ...draft, minusPoints })} />
           </div>
-          <p className="muted small">0 = kein Button für diese Richtung.</p>
+          <p className="muted small">
+            Jede Gewohnheit zählt höchstens 1× am Tag. „+“ gibt einen kleinen Bonus, „−“ kostet je Stärke{' '}
+            {BALANCE.habitMinus.vitalityLossPerPoint} Vitalität (0 = kein Minus-Button).
+          </p>
         </>
       )}
       {error && draft.title.trim() && <p className="danger small">{error}</p>}

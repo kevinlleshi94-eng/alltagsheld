@@ -3,7 +3,7 @@
  * writes results back – each action in one transaction.
  */
 import { BALANCE } from '../game/balance';
-import { winFight, type VictoryOutcome } from '../game/bossRewards';
+import { openPendingChest, winFight, type VictoryOutcome } from '../game/bossRewards';
 import { toDateKey } from '../game/dates';
 import { allocateAttribute } from '../game/progression';
 import type { ChestId } from '../game/items';
@@ -11,7 +11,16 @@ import { applyDelta } from '../game/resources';
 import { buyChest, equipItem, sellItem, ShopError, unequipSlot } from '../game/shop';
 import { createInitialPlayer, createSeedTasks, defaultSettings } from '../game/seed';
 import { pendingDays, settle, type ReviewInput, type SettlementResult } from '../game/settlement';
-import { checkDaily, emptyLog, tapHabit, uncheckDaily, undoLastHabitTap, type ActionResult } from '../game/taskActions';
+import {
+  checkDaily,
+  emptyLog,
+  tapHabit,
+  taskCountsOn,
+  uncheckDaily,
+  undoLastHabitTap,
+  type ActionResult,
+  type TaskCounts,
+} from '../game/taskActions';
 import type {
   Attribute,
   Delta,
@@ -92,13 +101,14 @@ export interface ActionOutcome {
 async function runTaskAction(
   taskId: string,
   date: string,
-  fn: (player: Player, task: Task, log: ReturnType<typeof emptyLog>, ctx: LogicContext) => ActionResult,
+  fn: (player: Player, task: Task, log: ReturnType<typeof emptyLog>, counts: TaskCounts, ctx: LogicContext) => ActionResult,
 ): Promise<ActionOutcome> {
   return db.transaction('rw', [db.player, db.tasks, db.dayLogs, db.items], async () => {
-    const [player, task] = await Promise.all([getPlayer(), db.tasks.get(taskId)]);
+    const [player, tasks] = await Promise.all([getPlayer(), db.tasks.toArray()]);
+    const task = tasks.find((t) => t.id === taskId);
     if (!task) throw new Error('Aufgabe nicht gefunden');
     const log = (await db.dayLogs.get([date, taskId])) ?? emptyLog(date, task);
-    const r = fn(player, task, log, logicContext());
+    const r = fn(player, task, log, taskCountsOn(tasks, date), logicContext());
     if (!r.changed) return { events: [], applied: r.applied, changed: false };
     const events = await enrichAndBreakItems(r.events, r.brokenItemIds);
     await db.player.put(r.player);
@@ -122,17 +132,17 @@ async function enrichAndBreakItems(events: GameEvent[], brokenItemIds: string[])
 
 /** Tick / un-tick a daily for today */
 export function toggleDaily(taskId: string, date = todayKey()): Promise<ActionOutcome> {
-  return runTaskAction(taskId, date, (player, task, log, ctx) =>
-    log.done ? uncheckDaily(player, task, log, ctx) : checkDaily(player, task, log, ctx),
+  return runTaskAction(taskId, date, (player, task, log, counts, ctx) =>
+    log.done ? uncheckDaily(player, task, log, ctx) : checkDaily(player, task, log, counts, ctx),
   );
 }
 
 export function tapHabitToday(taskId: string, kind: HabitTapKind, date = todayKey()): Promise<ActionOutcome> {
-  return runTaskAction(taskId, date, (player, task, log, ctx) => tapHabit(player, task, kind, log, ctx));
+  return runTaskAction(taskId, date, (player, task, log, counts, ctx) => tapHabit(player, task, kind, log, counts, ctx));
 }
 
 export function undoHabitToday(taskId: string, date = todayKey()): Promise<ActionOutcome> {
-  return runTaskAction(taskId, date, (player, task, log, ctx) => undoLastHabitTap(player, task, log, ctx));
+  return runTaskAction(taskId, date, (player, task, log, _counts, ctx) => undoLastHabitTap(player, task, log, ctx));
 }
 
 export async function spendAttributePoint(attribute: Attribute): Promise<void> {
@@ -197,28 +207,31 @@ export async function sellItemById(itemId: string): Promise<number> {
 /**
  * The battle scene beat the enemy at `expected`. Advances only if the hero is
  * still there (a death or the dev menu may have moved them in the meantime).
+ * A boss beaten for the first time gives gold + a kept chest (or the dragon's hoard → inventory).
  */
-export async function recordVictory(expected: StagePosition): Promise<RecordedVictory | null> {
+export async function recordVictory(expected: StagePosition): Promise<VictoryOutcome | null> {
   return db.transaction('rw', [db.player, db.items], async () => {
     const player = await getPlayer();
     if (player.round !== expected.round || player.area !== expected.area || player.stage !== expected.stage) return null;
-    // boss beaten for the first time → gold, maybe a chest (feedback Phase 4)
     const result = winFight(player, logicContext(), newId);
-    let current: Item | null = null;
-    const drop = result.reward?.drop;
-    if (drop) {
-      const currentId = result.player.equipped[drop.item.slot];
-      current = currentId ? ((await db.items.get(currentId)) ?? null) : null;
-      await db.items.put(drop.item);
-    }
+    if (result.reward?.hoard.length) await db.items.bulkPut(result.reward.hoard);
     await db.player.put(result.player);
-    return { ...result, dropCurrent: current };
+    return result;
   });
 }
 
-/** victory as stored: + the item worn in the slot of a dropped item (for the comparison) */
-export interface RecordedVictory extends VictoryOutcome {
-  dropCurrent: Item | null;
+/** opens a kept boss chest for `slot`; the item lands in the inventory (not equipped) */
+export async function openBossChest(pendingId: string, slot: Slot): Promise<ChestOutcome & { chest: ChestId }> {
+  return db.transaction('rw', [db.player, db.items], async () => {
+    const player = await getPlayer();
+    const r = openPendingChest(player, pendingId, slot, logicContext(), newId());
+    if (!r) throw new ShopError('Truhe nicht gefunden');
+    const currentId = player.equipped[slot];
+    const current = currentId ? ((await db.items.get(currentId)) ?? null) : null;
+    await db.player.put(r.player);
+    await db.items.put(r.item);
+    return { item: r.item, current, chest: r.chest };
+  });
 }
 
 // ---------------------------------------------------------------------------

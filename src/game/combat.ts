@@ -166,14 +166,44 @@ export function enemyDefFor(pos: StagePosition, balance: Balance): EnemyDef {
 
 /** Difficulty multipliers of a stage (1 / 1 at Straße 1) – see balance.enemies */
 export function stageScale(pos: StagePosition, balance: Balance): { hp: number; damage: number } {
-  const en = balance.enemies;
-  const a = (pos.round - 1) * balance.combat.areaCount + (pos.area - 1);
-  const s = pos.stage - 1;
-  return {
-    hp: (1 + en.areaHpGrowthLinear * a) * Math.pow(1 + en.areaHpGrowthExponential, a) * (1 + en.stageHpGrowth * s),
-    damage:
-      (1 + en.areaDamageGrowthLinear * a) * Math.pow(1 + en.areaDamageGrowthExponential, a) * (1 + en.stageDamageGrowth * s),
-  };
+  const hp = areaScale(pos.area, virtualStage(pos.stage, balance), balance) * Math.pow(roundScale(balance), pos.round - 1);
+  return { hp, damage: Math.pow(hp, balance.enemies.damageExponent) };
+}
+
+/**
+ * Virtual position of a stage inside its area for the strength curve: normal enemies stage − 1,
+ * a boss counts `bossStageBonus` (area boss `areaBossStageBonus`) stages further.
+ */
+export function virtualStage(stage: number, balance: Balance): number {
+  const c = balance.combat;
+  const kind = stageKind(stage, balance);
+  return stage - 1 + (kind === 'areaBoss' ? c.areaBossStageBonus : kind === 'boss' ? c.bossStageBonus : 0);
+}
+
+/**
+ * Strength (HP scale) inside round 1 at virtual position `v`: the area's anchors at stage 1, boss 10,
+ * boss 20 and the area boss, growing evenly (geometrically) in between. Between boss 10 and boss 20 the
+ * optional `bend` shapes the growth (< 1: the enemies after boss 10 get strong quickly, > 1: slowly);
+ * `startBend` does the same between stage 1 and boss 10 (used for a gentle first fight).
+ */
+export function areaScale(area: number, v: number, balance: Balance): number {
+  const areas = balance.enemies.areas;
+  const a = areas[Math.min(areas.length, Math.max(1, area)) - 1];
+  const c = balance.combat;
+  const knots = [0, virtualStage(c.bossEveryNStages, balance), virtualStage(2 * c.bossEveryNStages, balance), virtualStage(c.stagesPerArea, balance)];
+  const values = [a.stage1, a.boss10, a.boss20, a.areaBoss];
+  let i = 0;
+  while (i < knots.length - 2 && v > knots[i + 1]) i++;
+  let t = (v - knots[i]) / (knots[i + 1] - knots[i]);
+  if (i === 0 && a.startBend) t = Math.pow(Math.max(0, t), a.startBend);
+  if (i === 1 && a.bend) t = Math.pow(Math.max(0, t), a.bend);
+  return values[i] * Math.pow(values[i + 1] / values[i], t);
+}
+
+/** every further round starts where the dragon was (its 5th enemy is as strong as the dragon) */
+function roundScale(balance: Balance): number {
+  const c = balance.combat;
+  return areaScale(c.areaCount, virtualStage(c.stagesPerArea, balance), balance) / areaScale(1, 4, balance);
 }
 
 export function enemyForStage(pos: StagePosition, balance: Balance): EnemyStats {
@@ -334,6 +364,30 @@ export function runFight(
 /** Expected outcome without randomness */
 export function canBeat(hero: FighterStats, enemy: EnemyStats, balance: Balance): boolean {
   return runFight(hero, enemy, () => 0.5, balance, { deterministic: true }).result === 'won';
+}
+
+/**
+ * Hero's fighting power: the largest enemy scale (balanced type, Straße values of balance.enemies) the hero
+ * beats without luck. Used by the simulation to spend attribute points like a sensible player.
+ */
+export function heroPower(hero: FighterStats, balance: Balance): number {
+  const en = balance.enemies;
+  const ref = enemyForStage({ round: 1, area: 1, stage: 1 }, balance);
+  let lo = 0.01;
+  let hi = 1e7;
+  for (let i = 0; i < 40; i++) {
+    const x = Math.sqrt(lo * hi);
+    const enemy: EnemyStats = {
+      ...ref,
+      maxHp: Math.max(1, Math.round(en.baseHp * x)),
+      damage: en.baseDamage * Math.pow(x, en.damageExponent),
+      attackInterval: en.baseAttackIntervalSec,
+      timerSec: balance.combat.fightTimerSec,
+    };
+    if (canBeat(hero, enemy, balance)) lo = x;
+    else hi = x;
+  }
+  return lo;
 }
 
 /** First stage index (from 0) the hero cannot beat (deterministic estimate) */

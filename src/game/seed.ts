@@ -69,6 +69,7 @@ export function createInitialPlayer(now: number, today: string, balance: Balance
     unspentPoints: 0,
     attributeHistory: [],
     equipped: { head: null, body: null, weapon: null, shield: null },
+    pendingChests: [],
     activePet: null,
     unlockedPets: [],
     round: 1,

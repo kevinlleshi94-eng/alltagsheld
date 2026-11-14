@@ -11,7 +11,7 @@ import type { Achievement, DayLog, Item, Player, Settings, Task } from '../game/
  *  2. bump SCHEMA_VERSION
  *  3. add a step to `migrateSnapshot` in migrations.ts (for old backup files)
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export class AlltagsheldDB extends Dexie {
   tasks!: Table<Task, string>;
@@ -62,6 +62,17 @@ export class AlltagsheldDB extends Dexie {
           .toCollection()
           .modify((item, ref) => {
             ref.value = convertLegacyItem(item, BALANCE);
+          }),
+      );
+    // v5: boss chests are kept until the player picks the slot (feedback v0.5)
+    this.version(5)
+      .stores({})
+      .upgrade((tx) =>
+        tx
+          .table<Player, string>('player')
+          .toCollection()
+          .modify((p) => {
+            p.pendingChests ??= [];
           }),
       );
   }

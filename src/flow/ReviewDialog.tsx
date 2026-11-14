@@ -3,7 +3,7 @@ import { formatDateKey } from '../game/dates';
 import { dailyRowsForDay, habitsForDay } from '../game/selectors';
 import type { ReviewInput } from '../game/settlement';
 import { useDayLogs, useTasks } from '../state/hooks';
-import { Checkbox, PointsBadge } from '../ui/controls';
+import { Checkbox } from '../ui/controls';
 import { PixelIcon } from '../ui/PixelIcon';
 import { Sheet } from '../ui/Sheet';
 
@@ -37,8 +37,9 @@ export function ReviewDialog({ date, olderDays, onDone, onDismiss }: Props) {
       return n;
     });
 
-  const setTap = (id: string, kind: 'plus' | 'minus', value: number) =>
-    setTaps((t) => ({ ...t, [id]: { ...(t[id] ?? { plus: 0, minus: 0 }), [kind]: Math.max(0, value) } }));
+  // every habit counts once per day: choosing one direction replaces the other
+  const setTap = (id: string, kind: 'plus' | 'minus', on: boolean) =>
+    setTaps((t) => ({ ...t, [id]: on ? { plus: kind === 'plus' ? 1 : 0, minus: kind === 'minus' ? 1 : 0 } : { plus: 0, minus: 0 } }));
 
   const submit = () => {
     if (busy) return;
@@ -87,7 +88,6 @@ export function ReviewDialog({ date, olderDays, onDone, onDismiss }: Props) {
               <button className={`daily-row ${checked.has(task.id) ? 'done-draft' : ''}`} onClick={() => toggle(task.id)}>
                 <Checkbox checked={checked.has(task.id)} label={task.title} />
                 <span className="daily-title">{task.title}</span>
-                <PointsBadge points={task.points} />
               </button>
             </li>
           ))}
@@ -102,25 +102,36 @@ export function ReviewDialog({ date, olderDays, onDone, onDismiss }: Props) {
             {habits.map((h) => {
               const log = logByTask.get(h.id);
               const add = taps[h.id] ?? { plus: 0, minus: 0 };
+              const already = (log?.taps.length ?? 0) > 0;
               return (
                 <li key={h.id} className="review-habit">
                   <div className="habit-title">{h.title}</div>
                   <div className="review-habit-counters">
-                    {h.plusPoints > 0 && (
-                      <Counter
-                        label="+"
-                        base={log?.plusCount ?? 0}
-                        extra={add.plus}
-                        onChange={(v) => setTap(h.id, 'plus', v)}
-                      />
-                    )}
-                    {h.minusPoints > 0 && (
-                      <Counter
-                        label="−"
-                        base={log?.minusCount ?? 0}
-                        extra={add.minus}
-                        onChange={(v) => setTap(h.id, 'minus', v)}
-                      />
+                    {already ? (
+                      <span className={`display small ${(log?.plusCount ?? 0) > 0 ? 'vit' : 'loss'}`}>
+                        {(log?.plusCount ?? 0) > 0 ? '✓ schon eingetragen' : '✗ schon eingetragen'}
+                      </span>
+                    ) : (
+                      <>
+                        {h.minusPoints > 0 && (
+                          <button
+                            className={`review-tap minus ${add.minus ? 'on' : ''}`}
+                            aria-pressed={add.minus > 0}
+                            onClick={() => setTap(h.id, 'minus', !add.minus)}
+                          >
+                            − passiert
+                          </button>
+                        )}
+                        {h.plusPoints > 0 && (
+                          <button
+                            className={`review-tap plus ${add.plus ? 'on' : ''}`}
+                            aria-pressed={add.plus > 0}
+                            onClick={() => setTap(h.id, 'plus', !add.plus)}
+                          >
+                            + geschafft
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </li>
@@ -131,20 +142,5 @@ export function ReviewDialog({ date, olderDays, onDone, onDismiss }: Props) {
       )}
       <p className="muted small hint-bottom">Nach unten wischen oder ✕ = nichts weiter erledigt.</p>
     </Sheet>
-  );
-}
-
-function Counter({ label, base, extra, onChange }: { label: string; base: number; extra: number; onChange: (v: number) => void }) {
-  return (
-    <div className={`counter ${label === '−' ? 'minus' : 'plus'}`}>
-      <span className="counter-label display">{label}</span>
-      <button className="stepper-btn" disabled={extra <= 0} onClick={() => onChange(extra - 1)} aria-label="weniger">
-        −
-      </button>
-      <span className="stepper-value display">{base + extra}</span>
-      <button className="stepper-btn" onClick={() => onChange(extra + 1)} aria-label="mehr">
-        +
-      </button>
-    </div>
   );
 }

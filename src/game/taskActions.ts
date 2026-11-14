@@ -1,11 +1,34 @@
-import {
-  applyDelta,
-  lossForMinusPoints,
-  negate,
-  rewardForPoints,
-  type ApplyOptions,
-} from './resources';
+import { toDateKey } from './dates';
+import { applyDelta, dailyReward, habitPlusReward, lossForMinusPoints, negate, type ApplyOptions } from './resources';
 import type { DayLog, GameEvent, HabitTapKind, LogicContext, Player, Task } from './types';
+
+/** Was the task active (existing, not archived) on that day? */
+export function isTaskActiveOn(task: Task, date: string): boolean {
+  return !task.archived && toDateKey(task.createdAt) <= date;
+}
+
+/** How many tasks share the day's reward budget (feedback v0.5: every daily is worth the same) */
+export interface TaskCounts {
+  dailies: number;
+  /** habits with a "+" button */
+  plusHabits: number;
+}
+
+export function taskCountsOn(tasks: Task[], date: string): TaskCounts {
+  let dailies = 0;
+  let plusHabits = 0;
+  for (const t of tasks) {
+    if (!isTaskActiveOn(t, date)) continue;
+    if (t.type === 'daily') dailies += 1;
+    else if (t.plusPoints > 0) plusHabits += 1;
+  }
+  return { dailies, plusHabits };
+}
+
+/** has this habit already been tapped as often as allowed today? */
+export function habitUsedUp(log: DayLog | undefined, balance: LogicContext['balance']): boolean {
+  return (log?.taps.length ?? 0) >= balance.rewards.habitTapsPerDay;
+}
 
 export interface ActionResult {
   player: Player;
@@ -48,11 +71,12 @@ export function checkDaily(
   player: Player,
   task: Task,
   log: DayLog,
+  counts: TaskCounts,
   ctx: LogicContext,
   opts?: ApplyOptions,
 ): ActionResult {
   if (task.type !== 'daily' || log.done || log.settled) return unchanged(player, log);
-  const r = applyDelta(player, rewardForPoints(task.points, ctx.balance), ctx, opts);
+  const r = applyDelta(player, dailyReward(counts.dailies, ctx.balance), ctx, opts);
   return {
     player: r.player,
     log: { ...log, done: true, doneAt: ctx.now, reward: r.applied, points: task.points },
@@ -86,13 +110,14 @@ export function tapHabit(
   task: Task,
   kind: HabitTapKind,
   log: DayLog,
+  counts: TaskCounts,
   ctx: LogicContext,
   opts?: ApplyOptions,
 ): ActionResult {
-  if (task.type !== 'habit' || log.settled) return unchanged(player, log);
+  if (task.type !== 'habit' || log.settled || habitUsedUp(log, ctx.balance)) return unchanged(player, log);
   const points = kind === 'plus' ? task.plusPoints : task.minusPoints;
   if (points <= 0) return unchanged(player, log);
-  const delta = kind === 'plus' ? rewardForPoints(points, ctx.balance) : lossForMinusPoints(points, ctx.balance);
+  const delta = kind === 'plus' ? habitPlusReward(counts.plusHabits, ctx.balance) : lossForMinusPoints(points, ctx.balance);
   const r = applyDelta(player, delta, ctx, opts);
   const newLog: DayLog = {
     ...log,

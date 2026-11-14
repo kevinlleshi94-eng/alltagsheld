@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { buyChestItem, type ChestOutcome } from '../db/repo';
 import { BALANCE } from '../game/balance';
-import { CHESTS, RARITIES, SLOT_STATS, SLOTS, type ChestId } from '../game/items';
+import { CHESTS, RARITIES, type ChestId } from '../game/items';
 import { chestPrice } from '../game/shop';
-import type { Player, Slot } from '../game/types';
+import type { PendingChest, Player, Slot } from '../game/types';
+import { formatStage } from '../game/world';
+import { BossChestDialog } from '../shop/BossChest';
+import { SlotTiles } from '../shop/SlotTiles';
 import { ChestOpening } from '../shop/ChestOpening';
 import { CHEST_CLOSED, chestPalette } from '../shop/art';
 import { rarityStyle, statsText } from '../shop/format';
@@ -13,7 +16,7 @@ import { useItems, usePlayer } from '../state/hooks';
 import { useStore } from '../state/store';
 import { activeTab, shopSlot } from '../state/ui';
 import { Section } from '../ui/controls';
-import { CHEST_NAMES, RARITY_NAMES, SLOT_NAMES, STAT_SHORT } from '../ui/labels';
+import { CHEST_NAMES, RARITY_NAMES } from '../ui/labels';
 import { PixelIcon, PixelSprite } from '../ui/PixelIcon';
 
 const NOTHING_WORN: Record<Slot, string> = {
@@ -32,6 +35,7 @@ export function ShopScreen() {
   const slot = useStore(shopSlot);
   const [opening, setOpening] = useState<{ chest: ChestId; outcome: ChestOutcome } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bossChest, setBossChest] = useState<PendingChest | null>(null);
   if (!player || !items) return null;
 
   const current = items.find((i) => i.id === player.equipped[slot]) ?? null;
@@ -47,26 +51,30 @@ export function ShopScreen() {
 
   return (
     <div className="screen">
+      {player.pendingChests.length > 0 && (
+        <Section title="Boss-Beute">
+          <p className="shop-intro">Ungeöffnete Truhen von Bossen – du wählst den Platz beim Öffnen.</p>
+          <ul className="list">
+            {player.pendingChests.map((c) => (
+              <li key={c.id} className="card chest-row">
+                <div className="chest-thumb">
+                  <PixelSprite rows={CHEST_CLOSED} palette={chestPalette(c.chest)} scale={3} />
+                </div>
+                <div className="chest-info">
+                  <div className="display chest-name">{CHEST_NAMES[c.chest]}</div>
+                  <div className="muted small">vom Boss {formatStage(c.from, BALANCE.combat.stagesPerArea)}</div>
+                </div>
+                <button className="btn btn-primary chest-buy" onClick={() => setBossChest(c)}>
+                  <span className="chest-buy-label">Öffnen</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
       <Section title="Truhen" right={<GoldChip gold={player.gold} />}>
         <p className="shop-intro">Für welches Ausrüstungsteil öffnest du die Truhe?</p>
-        <div className="slot-tiles" role="tablist">
-          {SLOTS.map((s) => {
-            const worn = items.find((i) => i.id === player.equipped[s]);
-            return (
-              <button
-                key={s}
-                role="tab"
-                aria-selected={s === slot}
-                className={`slot-tile ${s === slot ? 'active' : ''} ${worn ? '' : 'empty'}`}
-                onClick={() => shopSlot.set(s)}
-              >
-                <ItemIcon slot={s} rarity={worn?.rarity ?? 'common'} scale={3} />
-                <span className="slot-tile-name display">{SLOT_NAMES[s]}</span>
-                <span className="slot-tile-stats">{SLOT_STATS[s].map((st) => STAT_SHORT[st]).join(' + ')}</span>
-              </button>
-            );
-          })}
-        </div>
+        <SlotTiles player={player} items={items} selected={slot} onSelect={(s) => shopSlot.set(s)} />
         <div className="shop-current small">
           {current ? (
             <>
@@ -112,6 +120,14 @@ export function ShopScreen() {
       </Section>
 
       {opening && <ChestOpening chest={opening.chest} outcome={opening.outcome} onDone={() => setOpening(null)} />}
+      {bossChest && (
+        <BossChestDialog
+          pendingId={bossChest.id}
+          chest={bossChest.chest}
+          caption="Boss-Beute"
+          onClose={() => setBossChest(null)}
+        />
+      )}
     </div>
   );
 }

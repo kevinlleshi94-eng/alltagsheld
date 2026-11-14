@@ -1,4 +1,4 @@
-import { isTaskActiveOn } from './settlement';
+import { isTaskActiveOn } from './taskActions';
 import type { DayLog, Task } from './types';
 
 export interface DailyRow {

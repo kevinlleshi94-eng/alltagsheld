@@ -49,8 +49,13 @@ export interface DayLog {
   reward: Delta | null;
   /** task points at check / settlement time (for statistics) */
   points: number;
-  /** vitality lost at settlement because not done (positive number) */
+  /** vitality lost at settlement (positive number; since v0.5 this day's share of the quota loss) */
   penalty: number;
+  /**
+   * v0.5: applied settlement effect of the day's quota (vitality ±, perfect-day gold), spread equally
+   * over the day's dailies. Missing on older logs (they only have `penalty`).
+   */
+  settlement?: Delta;
   // --- habit ---
   plusCount: number;
   minusCount: number;
@@ -81,6 +86,15 @@ export interface CombatProgress {
   dragonsDefeated: number;
 }
 
+/** a boss chest that waits for the player to pick a slot (schema v5) */
+export interface PendingChest {
+  id: string;
+  chest: import('./items').ChestId;
+  /** where it dropped */
+  from: StagePosition;
+  at: number;
+}
+
 export interface Player {
   id: 'player';
   name: string;
@@ -95,6 +109,8 @@ export interface Player {
   /** order in which attribute points were spent (needed for death penalty) */
   attributeHistory: Attribute[];
   equipped: Record<Slot, string | null>;
+  /** boss chests not opened yet (schema v5) */
+  pendingChests: PendingChest[];
   activePet: string | null;
   unlockedPets: string[];
   round: number;
@@ -161,8 +177,10 @@ export type GameEvent =
   | { type: 'levelUp'; level: number }
   | { type: 'levelDown'; level: number }
   | { type: 'death'; report: DeathReport }
-  /** a boss dropped a chest: the item is already in the inventory (feedback Phase 4) */
-  | { type: 'chestDrop'; chest: import('./items').ChestId; item: Item; current: Item | null };
+  /** a boss dropped a chest: it waits in player.pendingChests until the player picks the slot (v0.5) */
+  | { type: 'bossChest'; pendingId: string; chest: import('./items').ChestId }
+  /** the dragon's hoard: one best item per slot, already in the inventory */
+  | { type: 'dragonHoard'; items: Item[] };
 
 /** Context passed into all logic functions (keeps them pure & testable) */
 export interface LogicContext {

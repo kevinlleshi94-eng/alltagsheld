@@ -9,11 +9,9 @@ Echte Aufgaben abhaken → XP/Gold/Vitalität → Held wird stärker. Vollständ
 - Spiellogik bleibt rein (keine UI/DB-Imports in `src/game/`), mit Unit-Tests.
 - UI-Sprache Deutsch; Code/Kommentare Englisch.
 - Annahmen bei Unklarheiten treffen und im Phasen-Abschluss auflisten.
-- Diese Datei aktuell halten (Stand, Befehle, Struktur).
+- Diese Datei (und `src/battle/CLAUDE.md`) aktuell halten (Stand, Befehle, Struktur).
 
 ## Tech-Stack
-TypeScript 7 · Vite 8 · React 19 · Dexie 4 (IndexedDB) + dexie-react-hooks · vite-plugin-pwa 2 (Workbox, `registerType: 'prompt'`) ·
-@dnd-kit (Sortieren) · @fontsource/fredoka (Schrift, CSS-Variable `--display`, Klasse `.display`) · Vitest 5 (+ fake-indexeddb für DB-Tests) · tsx (Skripte).
 Phaser 3.90 für die Kampfszene (per `import('./game')` nachgeladen, eigener ~1,2-MB-Chunk, vom Service Worker vorab gecacht).
 
 ## Befehle
@@ -21,11 +19,7 @@ Phaser 3.90 für die Kampfszene (per `import('./game')` nachgeladen, eigener ~1,
 |---|---|
 | `npm run dev` | Dev-Server (Port 5173; `.claude/launch.json` → Name `dev`) |
 | `npm.cmd run dev -- --host` | Dev-Server im Heimnetz fürs iPhone (PC: 192.168.178.23, Ethernet, Netzprofil „Öffentlich“; Firewall-Regel für node.exe erlaubt eingehend) |
-| `npm test` | alle Unit-Tests (`src/**/*.test.ts`) |
-| `npm run typecheck` | nur Typprüfung |
-| `npm run build` | Typprüfung + Produktions-Build nach `dist/` |
 | `npm run preview` | Build lokal mit Service Worker testen |
-| `npm run icons` | PNG-Icons in `public/` neu erzeugen |
 | `npm run simulate` | Balancing-Simulation (`--days=180 --seeds=7 --markdown`), Ergebnis → BALANCING.md |
 | `node scripts/fetch-lpc.mjs` | LPC-Ebenen + Definitionen nachladen (nur fehlende Dateien; neue Downloads vorher mit dem Nutzer absprechen) |
 | Deploy | Push auf `main` → GitHub Actions (`.github/workflows/deploy.yml`, Tests + Build) → GitHub Pages. `BASE_PATH=/<repo>/` wird im Workflow gesetzt. |
@@ -39,7 +33,6 @@ Daten (IndexedDB) hängen an der Adresse: Dev-Server (192.168.178.23:5173) und G
 ```
 src/game/        reine Logik + Tests
   balance.ts       ALLE Zahlenwerte (Belohnung, XP-Kurve, Vitalität, Strafen, Tod, Timer, Kampf, Gegnerwachstum, Truhen, Simulation)
-  types.ts         Domänentypen (Task, DayLog, Player, Item, Settings, GameEvent, LogicContext …)
   dates.ts         Datums-Keys YYYY-MM-DD (lokale Mitternacht), DST-sichere Arithmetik
   progression.ts   XP/Level, Attributpunkte (Reihenfolge in attributeHistory)
   resources.ts     applyDelta(): EINZIGE Stelle, die XP/Gold/Vitalität ändert (Level-Up/-Down, Gold ≥ 0, Vitalität ≤ max, Tod)
@@ -51,24 +44,13 @@ src/game/        reine Logik + Tests
   items.ts         Item-Generator: Truhen-Seltenheit, Budget (Seltenheit × Level ± Streuung) → Werte je Platz (SLOT_STATS, splitBudget), itemPower,
                    deutsche Namen (Adjektiv-Endung nach Genus), Verkaufspreis, convertLegacyItem (Schema v4)
   shop.ts          Truhe kaufen (Gold via applyDelta, Item landet unangelegt im Inventar), anlegen/ablegen, verkaufen, statDiff (Vergleich), sortInventory (seltenste zuerst), filterInventory
-  bossRewards.ts   Boss-Gold + Truhen-Drop beim ERSTEN Sieg (isFirstVictory), winFight = applyVictory + Belohnung (von repo und Simulation genutzt)
-  simulation.ts    Balancing-Simulation mit echten Spielfunktionen (scripts/simulate.ts); Profile 'user' (15 Aufgaben + 10 Gewohnheiten) / 'seed', simulateDetailed → Meilensteine
+  bossRewards.ts   Boss-Gold + Truhe beim ERSTEN Sieg (isFirstVictory) → player.pendingChests, openPendingChest (Platz wählen), dragonHoard,
+                   winFight = applyVictory + Belohnung (von repo und Simulation genutzt)
+  simulation.ts    Balancing-Simulation mit echten Spielfunktionen (scripts/simulate.ts); Profile 'user' (USER_DAILIES 13 Aufgaben + 4/3 Gewohnheiten +/−,
+                   „+“ mit 60 %, „−“ mit 30 % je Tag) / 'seed', simulateDetailed → Meilensteine
   world.ts         8 Gebiete: Namen, Paletten, Gegner (Archetyp + Platzhalter-Form/Farben), Zwischen-/Gebietsbosse
   seed.ts, rng.ts, testUtils.ts (TEST_BALANCE: fixe XP-Kurve, damit Mechanik-Tests nicht vom Tuning abhängen)
-src/battle/      Kampfszene
-  BattleView.tsx   React: Canvas-Container + HTML-Anzeigen (Kampfwerte oben links, Stufe, Timer, Ton-Taste oben rechts, Gegnername, Banner, Hinweis, Erschöpft)
-  bridge.ts        Stores React ↔ Szene (battleInput / battleHud / battleTimer), ohne Phaser-Import
-  game.ts          Phaser.Game (Zoom nach Höhe, DPR-genau: ~270 Spielpixel hoch → am Handy 1 Spielpixel = 1 CSS-px, ResizeObserver) + HTML-Ebene `.battle-fx` für Schadenszahlen; Dev: window.__battle
-  BattleScene.ts   Ablauf walkIn → (intro bei Boss) → fight → victory | retreat; Gebietswechsel: exit → Fade → areaHold (Name auf Schwarz) → Held läuft von links ein.
-                   Sprites per Promise-Cache (loadSprite), erst Platzhalter, dann Austausch; nächster Gegner wird vorab zusammengesetzt (preloadEnemy)
-  backgrounds.ts   prozedurale Hintergründe je Gebiet: Himmel, Wolken, Ferne, Mitte, Boden (Parallax 0,04 / 0,14 / 0,42 / 1), Stile in STYLES
-  sprites.ts       Platzhalter-Bitmaps (Held, 8 Gegnerformen) = Ersatz, wenn eine Grafik nicht lädt
-  HeroPortrait.tsx Held im Charakter-Tab (gleiche LPC-Teile/Ausrüstung wie im Kampf, Standbild, Glanz bei Episch/Legendär), Ersatz: Platzhalter
-  assets/catalog.ts   Asset-Manifest (rein, getestet): LPC-Teile (Ebenen, Material, Farbe), HERO_BASE, GEAR (Slot × Seltenheit → Aussehen),
-                      MONSTERS (Frame-Streifen der OGA-Sheets), ENEMY_SPRITES (alle 56 Gegner → LPC-Look oder Monster + Umfärbung)
-  assets/compose.ts   Zusammensetzen zur Laufzeit: LPC-Ebenen nach z sortiert + Rampen-Umfärbung; Monster: Chroma-Key + Gradient-Map in Gegnerfarben;
-                      Ergebnis = gepacktes Canvas + Animationen (idle/walk/attack/retreat) + Fußpunkt
-  assets/palettes.ts  Farbrampen (Metall, Stoff, Haut, Haare) für die Umfärbung
+src/battle/      Kampfszene – Dateien + Regeln in `src/battle/CLAUDE.md` (wird geladen, wenn dort gearbeitet wird)
 public/assets/   lpc/spritesheets/ (LPC-Generator-Ebenen, nur walk + slash), monsters/ (OGA-Sheets). Workbox cacht ALLE PNGs vorab → ungenutzte löschen
 assets-src/      Quellen: lpc/sheet_definitions (Credits je Ebene), oga/ (Original-Downloads); nicht im Build
 src/audio/sfx.ts Web-Audio-Soundeffekte (iOS-Unlock beim ersten Tippen, Lautstärke/An-Aus aus Einstellungen)
@@ -78,12 +60,8 @@ src/db/          Dexie-Schema (db.ts, SCHEMA_VERSION), repo.ts (Aktionen in Tran
 src/lib/clock.ts Spieluhr mit Dev-Versatz – IMMER clock.now() statt Date.now() für Spielzeit
 src/state/       Mini-Stores (store.ts), ui.ts (Event-Queue, Flow-Phase, Floating-Texte, Toasts, Tab, shopSlot, fightBlockers),
                  hooks.ts (Live-Queries, useToday, useItems, usePauseFight), actions.ts (guarded = Fehler als Toast)
-src/flow/        flowLogic.ts (Ablauf beim Öffnen) + FlowController, ReviewDialog, SummaryDialog, TodayPrompt, EventPresenter (Level-Up, Tod)
-src/screens/     TodayScreen, ManageTasksScreen, SettingsScreen (+ DevMenu), MoreScreen, CharacterScreen (Ausrüstung, Inventar), ShopScreen, PlaceholderScreens (Statistik)
 src/ui/          Sheet/Modal (+ effect-Ebene, per Portal in document.body), Portal.tsx, Confirm, controls, layout (Statusleiste, Tab-Leiste), PixelIcon/PixelSprite,
                  labels.ts (deutsche Namen + Seltenheitsfarben RARITY_COLORS, auch für Phaser), combatText.ts
-src/styles/      global.css, shop.css (Shop, Items, Truhen-Animation inkl. „Bewegung reduzieren“-Varianten)
-scripts/         generate-icons.mjs, simulate.ts
 ```
 
 ## Wichtige Designentscheidungen
@@ -102,41 +80,36 @@ scripts/         generate-icons.mjs, simulate.ts
 - Datenbank-Schema ändern: neue `this.version(N)` in `db.ts` + `SCHEMA_VERSION` erhöhen + Schritt in `migrateSnapshot` (alte Backups).
 - Dev-Menü: 5× auf die Versionsnummer in den Einstellungen tippen (Status in localStorage `alltagsheld.devMenu`).
   Vorspulen ist absichtlich nicht umkehrbar (sonst wären „heutige“ Logs schon abgerechnet).
-- **Kampf**: Normale Gegner geben keine Belohnung, nur Stufenfortschritt. Bosse geben beim ersten Sieg Gold + evtl. Truhe (bossRewards.ts):
-  Banner „Boss besiegt! +N Gold · Truhe gefunden!“, danach Event `chestDrop` → Truhen-Animation mit „Beute vom Boss!“.
+- **Kampf**: Normale Gegner geben keine Belohnung, nur Stufenfortschritt. **Jeder** Boss gibt beim ersten Sieg Gold + eine Truhe (bossRewards.ts):
+  Banner „Boss besiegt! +N Gold · Holztruhe!“, die Truhe landet in `player.pendingChests` (Schema v5), Event `bossChest` → Dialog
+  „Beute vom Boss!“: Platz wählen → Öffnungsanimation; „Später“ lässt sie im Shop unter „Boss-Beute“. Der Drache gibt statt Truhe
+  den Drachenschatz (je Platz ein legendäres Item mit bestem Wurf, Event `dragonHoard`).
   Ein Sieg wird sofort per `repo.recordVictory(pos)` gespeichert
   (rückt nur vor, wenn der Held noch dort steht). Die Szene unterscheidet eigene Siege von Positionswechseln von außen (Tod, Dev-Menü)
   über `expected`/`prevInputPos`; Wechsel von außen → Fade zur neuen Stufe. Heldenwerte gelten ab dem nächsten Kampf.
   Pause (Flow ≠ main oder Popup in der Queue) über eigenes `paused`-Flag – NICHT `scene.pause()` (bleibt hängen, wenn während create() aufgerufen).
-- **Gegnerwachstum** (BALANCING.md): Grund-LP 56 (Straße 1), Sägezahn – +4 %/Stufe innerhalb eines Gebiets, Grundstärke je Gebiet ×1,36 LP / ×1,12 Schaden.
-  Start (iPhone-Feedback): neuer Held schafft höchstens Stufe 9, Boss 10 braucht 1–2 Level-Ups (Unit-Tests in combat.test.ts).
-  Alle Kampf-Timer 10 s (Nutzer-Feedback, weicht von SPEC 15/20 s ab), Bosse ×2 LP, Gebietsbosse ×3 LP. XP pro Level max. 1000 (Level-Up alle 4–5 Tage).
+- **Gegnerwachstum** (v0.5, BALANCING.md): Stärke je Gebiet über 4 Ankerpunkte (`balance.enemies.areas`: Stufe 1, Boss 10, Boss 20,
+  Gebietsboss), dazwischen gleichmäßig; `bend`/`startBend` formen die Kurve (`areaScale` in combat.ts). Schaden wächst mit √Stärke.
+  Ein Boss ist so stark wie ein Gegner 3 Stufen weiter (Gebietsboss 4,5) → davor leichter, danach 2–3 leichte Gegner; keine LP-Faktoren mehr.
+  Alle Gegnertypen etwa gleich schwer (unterscheiden sich im Rhythmus). Neuer Held gewinnt Stufe 1 ohne Punkte (Tests in combat.test.ts).
+  Alle Kampf-Timer 10 s (Nutzer-Feedback, weicht von SPEC 15/20 s ab). XP pro Level `min(520, 80 × Level^0,9)` (anfangs fast täglich, ab ~Level 8 alle 3–4 Tage).
   Stufen-Index = (Runde−1)·200 + (Gebiet−1)·25 + (Stufe−1). Bosse ×2 Sprite-Größe (gedeckelt auf 46 % der Szenenhöhe, mind. ×1,2).
-- **Texte im Kampf sind HTML**, nie Phaser-Text: Das Canvas rendert in Spielpixeln (Zoom nur per CSS), Text wäre dort unscharf.
+- **Kampfszene & Grafik** (HTML-Texte statt Phaser-Text, `.battle-canvas` immer rendern, LPC-Zusammensetzen, Platzhalter statt Absturz,
+  GEAR-Aussehen, Treffer-Timing, neue Gegner): siehe `src/battle/CLAUDE.md`.
 - **iPhone ist der Maßstab** (Nutzer-Feedback): App max. 430 px breit, am PC mittig wie ein iPhone; Kampfhöhe `min(36dvh, 304px)`.
   Bosse ×2, aber nie über Stufenanzeige/Timer (`HUD_CLEAR_PX` in BattleScene). Handy quer → Hinweis „hochkant halten“ (nur CSS).
   Hinweis „Erledige Aufgaben …“ oben links unter den Kampfwerten, nicht in der Mitte.
 - **„Bewegung reduzieren“ (iOS)**: Die globale Regel kürzt alle Animationen auf 0,01 ms. Spiel-Feedback (Floats, Schadenszahlen,
   Banner, Level-Up) hat im selben Media-Block eigene Fade-Varianten (`rm-*`). Neue Feedback-Animationen dort ergänzen, sonst sind sie unsichtbar.
 - **Stufen-Beschriftung**: „Gebiet 2 – Wald · Stufe 5/25“ (`areaLabel`/`formatStage` in world.ts). Kein „LV“, das ist das Helden-Level.
-- `BattleView` muss den Canvas-Container `.battle-canvas` IMMER rendern (auch ohne Spieler, z. B. beim Zurücksetzen) – das Phaser-Spiel wird nur einmal darin erzeugt.
 - **Level-Up**: Punkt muss im Popup sofort verteilt werden (kein „Später“, Nutzer-Feedback). Alte unverteilte Punkte bleiben im Charakter-Tab verteilbar.
 - **Vitalität ≠ Leben**: Statusleiste zeigt „VIT“ (Alltagsenergie), das Herz steht nur noch für Lebenspunkte im Kampf.
-- **Strafe verpasste Aufgabe** = Punkte × 1,5 (Nutzerentscheidung, SPEC angepasst): Szenario „5 verpasst + 2× −“ → 9 Tode/Halbjahr
-  (Unit-Test in simulation.test.ts). Nebenwirkung: 75 % stirbt nie, 50 % kommt bis Sumpf. Rundung pro Tag in settlement.ts.
+- **Belohnungen & Quote (v0.5)**: Alle täglichen Aufgaben zusammen = festes Tagesbudget (200 XP / 100 Gold), gleich verteilt
+  (Punkte zählen nur noch bei „−“-Gewohnheiten). „+“-Gewohnheiten zusammen 25 % des Budgets + 2 VIT; jede Gewohnheit zählt 1× am Tag
+  (`habitTapsPerDay`, Taste danach gesperrt). Vitalität am Tagesende nur nach **Quote der Aufgaben**: < 60 % Verlust (0 % → −30),
+  60–70 % ±0, darüber Gewinn bis +15; 100 % → +30 % des Tagesgolds. „−“ = −3 VIT / −5 Gold je Punkt. Rundung pro Tag in settlement.ts.
 - **Ausrüstung** zählt als zusätzliche Attributpunkte (`effectiveAttributes`: Stärke/Tempo/Leben); Krit-Chance vom Schild separat (`gearCrit`,
   in Prozentpunkten gespeichert, Held max. 60 %). Player.progress (Schema v2): besiegte Gegner/Bosse/Drachen, weiteste Stufe.
-- **Grafik (Phase 3)**: Keine fertigen Spritesheets im Repo, sondern Zusammensetzen zur Laufzeit (`assets/compose.ts`):
-  Held + menschliche Gegner aus LPC-Ebenen (Körper, Kopf, Kleidung, Rüstung, Helm, Waffe, Schild), umgefärbt über exakte 6-Farben-Rampen
-  (`palettes.ts`); Tiere/Monster aus OGA-Sheets, per Gradient-Map in die Gegnerfarben aus world.ts (Kontur bleibt). LPC-Reihe 1 = links, 3 = rechts;
-  walk 9 Frames (Frame 0 = Stand), slash 6. Fußpunkt LPC = Framemitte + 30 px.
-- **Nie abstürzen**: Jede Figur startet als Platzhalter und wird ausgetauscht, sobald sie fertig ist; Fehler → Platzhalter bleibt, nächster Versuch beim nächsten Auftritt.
-- **Ausrüstung sichtbar**: `GEAR` (Slot × Seltenheit) in catalog.ts; Test sichert, dass jede Seltenheit je Slot anders aussieht.
-  Muskulöser LPC-Körper hat keine Hemden/Rüstungen → nur Helme/Hosen (Test). Legendäre Waffe = goldenes Langschwert (Farbtabelle `GOLD_BLADE`).
-- **Treffer-Timing**: Angriffsanimation startet sofort, Schaden/Blitz/Zahl erst im Treffer-Frame (Vorlauf ≤ 0,24 s, Ereignisse in `pending`).
-  Nach `fight.result` nicht mehr `stepFight` aufrufen (sendet sonst erneut 'end').
-- **Neue Gegner/Teile**: Eintrag in catalog.ts genügt (Tests prüfen Dateien, Bildmaße, Frames im Bild, alle Gegner gemappt). Credits in CREDITS.md ergänzen.
-  Zu kleine Monster: `scale` im ENEMY_SPRITES-Eintrag (Hydra ×2, Kraken ×1,5 – Nutzer-Feedback).
 - **Shop (Phase 4)**: Aussehen = Platz × Seltenheit (`spriteKey` `slot:rarity`, passt zu GEAR); Name passt zum Teil (NOUNS in items.ts).
   Kauf speichert das Item sofort unangelegt (`repo.buyChestItem` → `{item, current}`), erst „Anlegen“ rüstet aus → Abbruch der Animation verliert nichts.
   Verkaufen = 25 % des Truhenpreises (unbekannte Truhe → Holz). Truhen-Animation pausiert den Kampf (`usePauseFight` → `fightBlockers`).
@@ -144,7 +117,8 @@ scripts/         generate-icons.mjs, simulate.ts
   Seltenheitsfarben nur in labels.ts (`RARITY_COLORS`), CSS bekommt sie als `--rarity` – **nur für Schrift/Rahmen**,
   Item-Bilder in Materialfarben wie im Kampf (`ITEM_LOOK`/`itemPalette` in art.ts, passt zu GEAR).
 - **Feedback Phase 4** (v0.4.1): Werte je Platz fest (Waffe Stärke [+ Tempo], Helm Tempo, Rüstung Leben, Schild Leben + Krit), Schema v4 rechnet alte Items um.
-  Truhen 250/1000/3750. Balancing auf das Nutzer-Profil (35 Punkte/Tag): Boss 10 an Tag 3–4, Boss 20 an Tag 7–9, Drache ~Tag 170–200 (BALANCING.md, Test in simulation.test.ts).
+  Truhen 250/1000/3750. Seltenheitsfaktoren seit v0.5 1/1,35/1,8/2,4/3,2 (+15 % bei Episch/Legendär).
+  Balancing v0.5 auf das Nutzer-Profil bei 65 %: Boss 10 Tag 4→5, Boss 20 Tag 8→10, Straße Tag ~13, Drache ~Tag 171 (BALANCING.md, Tests in simulation.test.ts).
   **Overlays immer per Portal in document.body** (Sheet, Modal, ChestOpening): in `.content` werden sie auf iOS abgeschnitten/falsch geschichtet.
   Charakter-Tab: Held → Attribute (Wert jetzt → nach nächstem Punkt) → Ausrüstung → Inventar (Filter-Chips) → Kampfwerte → Fortschritt.
 
@@ -170,11 +144,16 @@ scripts/         generate-icons.mjs, simulate.ts
 - [x] **Feedback-Runde Phase 4** (v0.4.1): Boss-Gold + seltene Truhen, feste Item-Werte je Platz + Krit-Chance (Schema v4), Item-Bilder in Materialfarbe,
   Charakter-Tab neu (Attribute oben mit Vorschau), Inventar-Filter + Sortierung, klarere Platzwahl im Shop, Overlays per Portal (iOS),
   Balancing auf 15 Aufgaben + 10 Gewohnheiten (Truhen ×2,5, Boss ×3 / ×2,5, +7 %/Stufe, ×1,44/Gebiet), `npm run simulate` mit Meilensteinen
+- [x] **Balancing-Runde** (v0.5.0): Tagesbudget statt Punkte, Quote nach Aufgaben (VIT + Perfekt-Tag-Gold), Gewohnheiten 1×/Tag,
+  XP-Kurve 520, Gegner über Ankerpunkte je Gebiet, Boss = 3 Stufen weiter, jede Bosstruhe mit Platzwahl (Schema v5), Drachenschatz,
+  Simulation auf 13 Aufgaben + 4/3 Gewohnheiten
 - [ ] Phase 5 – Streaks, Haustiere, Erfolge, Statistik, Sounds, Backup-Hinweis, Feinschliff
 
 ## Offene Punkte
-- v0.4.1 wartet auf iPhone-Feedback (Truhen-Animation jetzt ganz sichtbar?, Detailblatt, Tempo bis Boss 10/20, Truhenzahl).
-- Truhen bis Boss 20: Simulation ergibt 4 statt gewünschter 5–7 (Kompromiss, siehe BALANCING.md „Abgleich“).
+- v0.5.0 wartet auf Feedback. Abweichungen laut Simulation: Bosse halten ~1,5–2,5 Tage (gewünscht 2–3 / 3–4),
+  Wände 2–4 statt 1–2 Tage, Tag 1 endet an Stufe 5 (BALANCING.md „Abgleich“).
+- `Backup/` = privater Spielstand des Nutzers: nur lokal, nicht committen (in .gitignore).
+- Zeilenenden: Repo speichert LF. Python-Skripte mit `newline=''` lesen/schreiben, sonst entstehen CRLF-Dateien.
 - Haustiere kommen in Phase 5 (SPEC §8).
 - Sounds: Lautstärke/Häufigkeit der Treffer-Sounds will der Nutzer später noch einmal prüfen.
 - Sounds sind prozedural; echte Sounddateien optional in Phase 5.

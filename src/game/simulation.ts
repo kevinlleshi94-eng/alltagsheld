@@ -4,29 +4,41 @@
  * Run via `npm run simulate`.
  *
  * Model:
- * - task profiles: "user" = the user's real volume (15 dailies with 25 points + 10 "+" habit taps, feedback Phase 4),
- *   "seed" = the 13 start tasks (22 points) + "Selbst gekocht"
+ * - task profiles: "user" = the user's real tasks from the backup (feedback v0.5): 13 dailies, 4 "+" habits,
+ *   3 "−" habits; "seed" = the 13 start tasks + "Selbst gekocht" + "Fertigessen bestellt"
  * - every daily task is done with probability `fulfillment` (independent per task and day),
  *   or exactly `missedPerDay` random dailies are missed each day
- * - habits: "+" habits are tapped once with probability `fulfillment`; "−" habits once with probability
- *   1 − fulfillment, or exactly `habitMinusPerDay` "−" taps per day
+ * - habits (each at most once a day): every "+" habit with probability `habitPlusChance` (default 0.6 →
+ *   ~2.4 a day), every "−" habit with probability `habitMinusChance` (default 0.3 → ~0.9 a day; user: 3–4 of 7 a day),
+ *   or exactly `habitMinusPerDay` different "−" habits
  * - level-up points are spent "optimally" (greedy: the attribute that pushes the wall furthest)
  * - shop ("plan", like a player would): first a wooden chest for every slot, then save for an iron chest
  *   per slot, then gold chests. Better items are equipped, worse ones sold for 25 %.
  *   ("greedy" = always buy the best affordable chest right away)
- * - bosses give gold and sometimes a chest on the first victory (bossRewards.ts)
+ * - bosses give gold and a chest on the first victory (bossRewards.ts); the chest is opened right away for the
+ *   weakest slot, the dragon's hoard is equipped
  * - combat only while the app is open: `simulation.appSecondsPerDay` per day
  */
 import type { Balance } from './balance';
-import { winFight } from './bossRewards';
-import { enemyForStage, gearCrit, heroStats, heroStatsFromAttributes, runFight, stageKind, wallIndex } from './combat';
+import { openPendingChest, winFight } from './bossRewards';
+import {
+  enemyForStage,
+  gearCrit,
+  heroStats,
+  heroPower,
+  heroStatsFromAttributes,
+  runFight,
+  stageIndex,
+  stageKind,
+  type HeroStats,
+} from './combat';
 import { addDays } from './dates';
 import { CHESTS, SLOTS, generateItem, itemPower, sellPrice, type ChestId, type ItemStats } from './items';
 import { allocateAttribute } from './progression';
 import { seededRng } from './rng';
 import { createInitialPlayer, createSeedTasks } from './seed';
 import { settle } from './settlement';
-import { checkDaily, emptyLog, tapHabit } from './taskActions';
+import { checkDaily, emptyLog, tapHabit, taskCountsOn } from './taskActions';
 import type { Attribute, DayLog, LogicContext, Player, Slot, Task } from './types';
 
 export interface SimItem {
@@ -75,8 +87,12 @@ export interface SimConfig {
   fulfillment: number;
   /** exact number of dailies missed per day (overrides `fulfillment` for dailies) */
   missedPerDay?: number;
-  /** exact number of "−" habit taps per day (default: probability 1 − fulfillment per "−" habit) */
+  /** exact number of "−" habits tapped per day (overrides `habitMinusChance`) */
   habitMinusPerDay?: number;
+  /** chance per "+" habit and day (default 0.6) */
+  habitPlusChance?: number;
+  /** chance per "−" habit and day (default 0.3) */
+  habitMinusChance?: number;
   days: number;
   seed: number;
   balance: Balance;
@@ -86,10 +102,17 @@ export interface SimConfig {
   profile?: TaskProfile;
   /** default "plan" */
   shopPolicy?: ShopPolicy;
+  /**
+   * Tuning aid: instead of fighting, the hero wins every stage up to this stage index on the given day (1-based),
+   * bosses give their rewards as usual. Measures the hero's growth along the intended pace (BALANCING.md).
+   */
+  followSchedule?: (day: number) => number;
 }
 
 export interface SimResult {
   snapshots: SimSnapshot[];
+  /** highest stage index and level at the end of every day (index 0 = day 1) */
+  days: { highestIndex: number; level: number; deaths: number; hero: HeroStats }[];
   milestones: SimMilestone[];
   bought: Record<ChestId, number>;
   dropped: number;
@@ -99,30 +122,40 @@ export interface SimResult {
 
 const START = '2026-01-05';
 
-/** the user's volume (feedback Phase 4): 15 dailies with 25 points, 10 "+" habits, 1 "−" habit */
-export const USER_DAILY_POINTS = [3, 3, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1];
-export const USER_PLUS_HABITS = 10;
+/** the user's real tasks (backup of 14.11.2026): 13 dailies, 4 "+" habits, 3 "−" habits with 1 point */
+export const USER_DAILIES = 13;
+export const USER_PLUS_HABITS = 4;
+export const USER_MINUS_HABITS = 3;
 
 function userTasks(now: number, newId: () => string): Task[] {
-  const base = { plusPoints: 0, minusPoints: 0, archived: false, createdAt: now, archivedAt: null };
-  const dailies: Task[] = USER_DAILY_POINTS.map((points, i) => ({
+  const base = { points: 1, plusPoints: 0, minusPoints: 0, archived: false, createdAt: now, archivedAt: null };
+  const dailies: Task[] = Array.from({ length: USER_DAILIES }, (_, i) => ({
     ...base,
     id: newId(),
     type: 'daily',
     title: `Aufgabe ${i + 1}`,
-    points,
     order: i,
   }));
-  const habits: Task[] = Array.from({ length: USER_PLUS_HABITS }, (_, i) => ({
-    ...base,
-    id: newId(),
-    type: 'habit',
-    title: `Gewohnheit ${i + 1}`,
-    points: 0,
-    plusPoints: 1,
-    order: i,
-  }));
-  habits.push({ ...base, id: newId(), type: 'habit', title: 'Fertigessen', points: 0, minusPoints: 1, order: USER_PLUS_HABITS });
+  const habits: Task[] = [
+    ...Array.from({ length: USER_PLUS_HABITS }, (_, i): Task => ({
+      ...base,
+      id: newId(),
+      type: 'habit',
+      title: `Gute Gewohnheit ${i + 1}`,
+      points: 0,
+      plusPoints: 1,
+      order: i,
+    })),
+    ...Array.from({ length: USER_MINUS_HABITS }, (_, i): Task => ({
+      ...base,
+      id: newId(),
+      type: 'habit',
+      title: `Schlechte Gewohnheit ${i + 1}`,
+      points: 0,
+      minusPoints: 1,
+      order: USER_PLUS_HABITS + i,
+    })),
+  ];
   return [...dailies, ...habits];
 }
 
@@ -142,6 +175,9 @@ export function simulateDetailed(cfg: SimConfig): SimResult {
   const newId = () => `s${++idc}`;
   const created = noonOf(START) - 3600_000;
   const tasks = (cfg.profile ?? 'user') === 'user' ? userTasks(created, newId) : createSeedTasks(created, newId);
+  const counts = taskCountsOn(tasks, START);
+  const plusChance = cfg.habitPlusChance ?? 0.6;
+  const minusChance = cfg.habitMinusChance ?? 0.3;
   const dailies = tasks.filter((t) => t.type === 'daily');
   const plusHabits = tasks.filter((t) => t.type === 'habit' && t.plusPoints > 0);
   const minusHabits = tasks.filter((t) => t.type === 'habit' && t.minusPoints > 0);
@@ -161,13 +197,14 @@ export function simulateDetailed(cfg: SimConfig): SimResult {
   let goldFromTasks = 0;
   let goldFromBosses = 0;
   const chestCount = () => bought.wood + bought.iron + bought.gold + dropped;
-  const dragonIndex = balance.combat.stagesPerArea * balance.combat.areaCount;
   const snapshots: SimSnapshot[] = [];
   const milestones: SimMilestone[] = [];
+  const dayStats: SimResult['days'] = [];
 
   const breakItems = (ids: string[]) => ids.forEach((id) => items.delete(id));
   const power = (stats: ItemStats | undefined) => itemPower(stats, balance);
 
+  /** a sensible player: the point goes where the fighting power grows most (preview in the Charakter tab) */
   const spendPoints = () => {
     while (player.unspentPoints > 0) {
       let best: Attribute = 'strength';
@@ -178,7 +215,7 @@ export function simulateDetailed(cfg: SimConfig): SimResult {
         attrs[a] += 1;
         const s = heroStatsFromAttributes(attrs, false, balance, crit);
         const dps = (s.damage * (1 + s.critChance * (s.critMultiplier - 1))) / s.attackInterval;
-        const score = wallIndex(s, balance, dragonIndex * 2) * 1e6 + s.maxHp * dps;
+        const score = heroPower(s, balance) * 1e6 + s.maxHp * dps;
         if (score > bestScore) {
           bestScore = score;
           best = a;
@@ -234,7 +271,33 @@ export function simulateDetailed(cfg: SimConfig): SimResult {
     }
   };
 
+  const win = (day: number, now: number) => {
+    const pos = { round: player.round, area: player.area, stage: player.stage };
+    const v = winFight(player, ctx(now), newId);
+    player = v.player;
+    if (v.reward) {
+      goldFromBosses += v.reward.gold;
+      if (v.reward.chest) {
+        // the player opens the boss chest right away for the weakest slot
+        dropped += 1;
+        const slot = [...SLOTS].sort((a, b) => slotTier(a) - slotTier(b) || slotPower(a) - slotPower(b))[0];
+        const opened = openPendingChest(player, v.reward.chest.id, slot, ctx(now), newId())!;
+        player = opened.player;
+        takeItem({ id: opened.item.id, slot, chest: opened.chest, stats: opened.item.stats });
+      }
+      for (const it of v.reward.hoard) takeItem({ id: it.id, slot: it.slot, chest: 'gold', stats: it.stats });
+      if (pos.round === 1 && stageKind(pos.stage, balance) !== 'normal')
+        milestones.push({ area: pos.area, stage: pos.stage, day, level: player.level, chests: chestCount() });
+    }
+    if (dragonDay === null && v.roundCleared) dragonDay = day;
+  };
+
   const fightDay = (day: number, now: number) => {
+    if (cfg.followSchedule) {
+      const target = cfg.followSchedule(day);
+      while (stageIndex(player, balance) < target) win(day, now);
+      return;
+    }
     const c = balance.combat;
     let time = 0;
     while (time < balance.simulation.appSecondsPerDay) {
@@ -244,20 +307,7 @@ export function simulateDetailed(cfg: SimConfig): SimResult {
       time += c.walkInSec + r.duration + (r.result === 'won' ? c.victorySec : c.retreatSec);
       if (r.result === 'won') {
         fightsWon += 1;
-        const pos = { round: player.round, area: player.area, stage: player.stage };
-        const v = winFight(player, ctx(now), newId);
-        player = v.player;
-        if (v.reward) {
-          goldFromBosses += v.reward.gold;
-          if (v.reward.drop) {
-            dropped += 1;
-            const it = v.reward.drop.item;
-            takeItem({ id: it.id, slot: it.slot, chest: v.reward.drop.chest, stats: it.stats });
-          }
-          if (pos.round === 1 && stageKind(pos.stage, balance) !== 'normal')
-            milestones.push({ area: pos.area, stage: pos.stage, day, level: player.level, chests: chestCount() });
-        }
-        if (dragonDay === null && v.roundCleared) dragonDay = day;
+        win(day, now);
       } else {
         fightsLost += 1;
       }
@@ -279,24 +329,24 @@ export function simulateDetailed(cfg: SimConfig): SimResult {
     for (const task of dailies) {
       const done = missed ? !missed.has(task.id) : rng() < cfg.fulfillment;
       if (!done) continue;
-      const r = checkDaily(player, task, emptyLog(date, task), ctx(now));
+      const r = checkDaily(player, task, emptyLog(date, task), counts, ctx(now));
       player = r.player;
       breakItems(r.brokenItemIds);
       logs.push(r.log);
     }
     const habitLogs = new Map<string, DayLog>();
     const tap = (task: Task, kind: 'plus' | 'minus') => {
-      const r = tapHabit(player, task, kind, habitLogs.get(task.id) ?? emptyLog(date, task), ctx(now));
+      const r = tapHabit(player, task, kind, habitLogs.get(task.id) ?? emptyLog(date, task), counts, ctx(now));
       player = r.player;
       breakItems(r.brokenItemIds);
       habitLogs.set(task.id, r.log);
     };
-    for (const h of plusHabits) if (rng() < cfg.fulfillment) tap(h, 'plus');
+    for (const h of plusHabits) if (rng() < plusChance) tap(h, 'plus');
     if (minusHabits.length > 0) {
       if (cfg.habitMinusPerDay !== undefined) {
-        for (let i = 0; i < cfg.habitMinusPerDay; i++) tap(minusHabits[i % minusHabits.length], 'minus');
+        for (let i = 0; i < Math.min(cfg.habitMinusPerDay, minusHabits.length); i++) tap(minusHabits[i], 'minus');
       } else {
-        for (const h of minusHabits) if (rng() >= cfg.fulfillment) tap(h, 'minus');
+        for (const h of minusHabits) if (rng() < minusChance) tap(h, 'minus');
       }
     }
     logs.push(...habitLogs.values());
@@ -312,6 +362,12 @@ export function simulateDetailed(cfg: SimConfig): SimResult {
     player = res.player;
     breakItems(res.brokenItemIds);
     spendPoints();
+    dayStats.push({
+      highestIndex: player.progress.highestStageIndex,
+      level: player.level,
+      deaths: player.deaths,
+      hero: heroStats(player, equipped(), balance),
+    });
 
     if (cfg.checkpoints.includes(d + 1)) {
       snapshots.push({
@@ -334,7 +390,7 @@ export function simulateDetailed(cfg: SimConfig): SimResult {
       });
     }
   }
-  return { snapshots, milestones, bought, dropped, goldFromTasks, goldFromBosses };
+  return { snapshots, days: dayStats, milestones, bought, dropped, goldFromTasks, goldFromBosses };
 }
 
 /** Median helper for the report */

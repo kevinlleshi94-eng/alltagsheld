@@ -34,7 +34,7 @@ import { composeCharacter, composeMonster, type AnimName, type ComposedSprite } 
 import * as bg from './backgrounds';
 import { battleHud, battleInput, battleTimer, samePosition, type BattleCallbacks, type BattleInput } from './bridge';
 import * as art from './sprites';
-import { RARITY_COLORS } from '../ui/labels';
+import { CHEST_NAMES, RARITY_COLORS } from '../ui/labels';
 
 type Phase = 'waiting' | 'walkIn' | 'intro' | 'fight' | 'victory' | 'retreat' | 'transition' | 'exit' | 'areaHold';
 type Who = 'hero' | 'foe';
@@ -489,9 +489,10 @@ export class BattleScene extends Phaser.Scene {
     }
     const next = { round: result.player.round, area: result.player.area, stage: result.player.stage };
     this.expected = next;
-    // boss beaten for the first time: gold (+ maybe a chest, shown as popup by React) – feedback Phase 4
+    // boss beaten for the first time: gold + a chest (slot choice as popup by React) – feedback v0.5
     const reward = result.reward;
-    const rewardText = reward ? `+${reward.gold} Gold${reward.drop ? ' · Truhe gefunden!' : ''}` : undefined;
+    const loot = reward?.hoard.length ? ' · Drachenschatz!' : reward?.chest ? ` · ${CHEST_NAMES[reward.chest.chest]}!` : '';
+    const rewardText = reward ? `+${reward.gold} Gold${loot}` : undefined;
     if (reward) playSfx('bossReward');
     if (result.areaCleared) {
       // hero walks off to the right, then the area transition starts

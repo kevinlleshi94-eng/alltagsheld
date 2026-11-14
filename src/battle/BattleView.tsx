@@ -18,16 +18,16 @@ import type { BattleGameHandle } from './game';
 /** a chest from a boss opens after the gold banner has been visible for a moment */
 const CHEST_DROP_DELAY_MS = 1600;
 
-/** stores a won fight; a chest dropped by a boss is shown as popup (item is already in the inventory) */
+/** stores a won fight; a boss chest (slot choice) or the dragon's hoard is shown as popup */
 async function saveVictory(pos: StagePosition) {
   const r = await recordVictory(pos);
-  const drop = r?.reward?.drop;
-  if (r && drop) {
-    const current = r.dropCurrent;
-    window.setTimeout(
-      () => pushEvents([{ type: 'chestDrop', chest: drop.chest, item: drop.item, current }]),
-      CHEST_DROP_DELAY_MS,
-    );
+  const reward = r?.reward;
+  if (reward?.chest) {
+    const { id, chest } = reward.chest;
+    window.setTimeout(() => pushEvents([{ type: 'bossChest', pendingId: id, chest }]), CHEST_DROP_DELAY_MS);
+  } else if (reward?.hoard.length) {
+    const items = reward.hoard;
+    window.setTimeout(() => pushEvents([{ type: 'dragonHoard', items }]), CHEST_DROP_DELAY_MS);
   }
   return r;
 }

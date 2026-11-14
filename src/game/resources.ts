@@ -94,13 +94,40 @@ export function applyDelta(player: Player, delta: Delta, ctx: LogicContext, opts
   };
 }
 
-/** Reward for completing a daily / tapping habit "+" with `points` */
-export function rewardForPoints(points: number, balance: Balance): Delta {
+/** Reward for one daily when `dailyCount` dailies are active that day: an equal share of the daily budget */
+export function dailyReward(dailyCount: number, balance: Balance): Delta {
+  const n = Math.max(1, dailyCount);
   return {
-    xp: points * balance.rewards.xpPerPoint,
-    gold: points * balance.rewards.goldPerPoint,
-    vitality: points * balance.rewards.vitalityHealPerPoint,
+    xp: Math.max(1, Math.round(balance.rewards.dailyXp / n)),
+    gold: Math.max(1, Math.round(balance.rewards.dailyGold / n)),
+    vitality: 0,
   };
+}
+
+/** Reward for one "+" habit tap when `plusHabitCount` habits have a "+" button: an equal share of the habit budget */
+export function habitPlusReward(plusHabitCount: number, balance: Balance): Delta {
+  const r = balance.rewards;
+  const n = Math.max(1, plusHabitCount);
+  return {
+    xp: Math.max(1, Math.round((r.dailyXp * r.habitPlusShare) / n)),
+    gold: Math.max(1, Math.round((r.dailyGold * r.habitPlusShare) / n)),
+    vitality: r.habitPlusVitality,
+  };
+}
+
+/**
+ * Settlement effect of a day's quota (done / total dailies, by tasks): vitality ± and, for a
+ * perfect day, extra gold. No dailies → no effect.
+ */
+export function quotaEffect(done: number, total: number, balance: Balance): Delta {
+  if (total <= 0) return { ...ZERO_DELTA };
+  const q = Math.min(1, Math.max(0, done / total));
+  const { neutralFrom, neutralTo, lossAtZero, gainAtFull } = balance.vitality.quota;
+  let vitality = 0;
+  if (q < neutralFrom) vitality = -Math.max(1, Math.round((lossAtZero * (neutralFrom - q)) / neutralFrom));
+  else if (q > neutralTo) vitality = Math.max(1, Math.round((gainAtFull * (q - neutralTo)) / (1 - neutralTo)));
+  const gold = q >= 1 ? Math.round(balance.rewards.dailyGold * balance.vitality.perfectDayGoldShare) : 0;
+  return { xp: 0, gold, vitality };
 }
 
 /** Effect of a habit "−" tap with `points` */

@@ -6,11 +6,20 @@
  * Combat / chests / streaks are prepared for later phases.
  */
 export const BALANCE = {
-  /** Reward per task point (daily checked or habit "+") */
+  /**
+   * Rewards (feedback v0.5: "alle Aufgaben gleich viel wert"). All dailies of a day together are worth
+   * `dailyXp` / `dailyGold`; each daily gets an equal share (13 dailies → 15 XP + 8 Gold each). More tasks
+   * therefore do not mean more XP. Task points no longer matter for rewards (only "−" habits use them).
+   */
   rewards: {
-    xpPerPoint: 10,
-    goldPerPoint: 5,
-    vitalityHealPerPoint: 1,
+    dailyXp: 200,
+    dailyGold: 100,
+    /** all "+" habits together are worth this share of the daily budget, split equally over them */
+    habitPlusShare: 0.25,
+    /** vitality healed by one "+" habit tap */
+    habitPlusVitality: 2,
+    /** every habit counts at most once per day (user feedback v0.5) */
+    habitTapsPerDay: 1,
   },
 
   /** Habit "−" tap, per minus point */
@@ -21,25 +30,33 @@ export const BALANCE = {
 
   /**
    * XP needed to go from `level` to `level + 1` = min(xpMaxPerLevel, round(base × level^exponent)).
-   * A perfect day gives 220 XP: level 3 on day 1, then level-ups every 2–3 days,
-   * from level 8 on about every 4–5 days (cap).
+   * Tuned for the user's 65 % day (~150 XP): almost a level per day at the start, from level 8 on every
+   * 3–4 days. See BALANCING.md.
    */
   levels: {
-    xpBase: 50,
-    xpExponent: 1.5,
-    xpMaxPerLevel: 1000,
+    xpBase: 80,
+    xpExponent: 0.9,
+    xpMaxPerLevel: 520,
     attributePointsPerLevel: 1,
   },
 
   vitality: {
     max: 100,
     /**
-     * Vitality loss per point of a daily task that was NOT done at settlement.
-     * SPEC said 3; lowered to 1.5 after the Phase 2 feedback (5 missed tasks a day
-     * should mean ~8 deaths per half year, see BALANCING.md). Fractions are
-     * rounded per day, so vitality stays a whole number.
+     * Day quota (done dailies / all dailies, counted by TASKS, feedback v0.5) → vitality at settlement:
+     *   below `neutralFrom`: loss, linear from `lossAtZero` (0 %) to 0 (60 %), at least 1
+     *   `neutralFrom`–`neutralTo`: ±0 (60–70 % is a normal day)
+     *   above `neutralTo`: gain, linear up to `gainAtFull` at 100 %, at least 1
+     * 30 % → −15, 0 % → −30: about a week of bad days until death.
      */
-    missedDailyLossPerPoint: 1.5,
+    quota: {
+      neutralFrom: 0.6,
+      neutralTo: 0.7,
+      lossAtZero: 30,
+      gainAtFull: 15,
+    },
+    /** 100 % of the dailies done → extra gold: this share of the full daily gold budget */
+    perfectDayGoldShare: 0.3,
     /** Below this fraction of max vitality the hero is "erschöpft" */
     exhaustedThreshold: 0.3,
     /** Damage multiplier while exhausted (used in combat, Phase 2) */
@@ -97,15 +114,18 @@ export const BALANCE = {
     fightTimerSec: 10,
     bossEveryNStages: 10,
     /**
-     * all fights last at most 10 s (user feedback). Feedback Phase 4: Zwischenboss 10 after 3–4 days, boss 20 after
-     * 8–9 days for the user's volume (15 dailies + 10 habits) → bosses ×3, area bosses ×2.5 (they are
-     * at stage 25 and grow with the stage, so they still hit hardest). See BALANCING.md.
+     * All fights last at most 10 s (user feedback). Feedback v0.5: a boss is as strong as a normal enemy
+     * `bossStageBonus` stages further: the enemies before it are easier, the boss holds the hero up for about
+     * 2 days (area boss 2–3), and the 2–3 enemies after it are easy (boss chest). Measured in BALANCING.md;
+     * the extra multipliers would only make boss fights longer.
      */
-    bossHpMultiplier: 3,
-    bossDamageMultiplier: 1.5,
+    bossStageBonus: 3,
+    bossHpMultiplier: 1,
+    bossDamageMultiplier: 1,
     bossTimerSec: 10,
-    areaBossHpMultiplier: 2.5,
-    areaBossDamageMultiplier: 1.5,
+    areaBossStageBonus: 4.5,
+    areaBossHpMultiplier: 1,
+    areaBossDamageMultiplier: 1,
     areaBossTimerSec: 10,
     failHintAfterAttempts: 3,
     /** scene timings (also used by the simulation) */
@@ -115,33 +135,44 @@ export const BALANCE = {
   },
 
   /**
-   * Enemy base values (Straße, Stufe 1) and growth ("sawtooth"):
-   *   scale = areaScale × (1 + stageGrowth × (stage − 1))
-   *   areaScale = (1 + areaGrowthLinear × a) × (1 + areaGrowthExponential)^a
-   * a = area index across rounds (Straße R1 = 0, Vulkan R1 = 7, Straße R2 = 8 …).
-   * Each new area starts easier than the previous boss, the wall forms inside the area.
-   * Start (feedback Phase 4, user volume 35 points/day): a new hero gets to stage 9, the boss at stage 10
-   * needs level 5 + the first chests (day 3), boss 20 level 8 (day 9), Straße done on day ~12, dragon after ~5–6 months.
+   * Enemies (feedback v0.5, tuned with the simulation, see BALANCING.md). Per area the strength (multiplier on
+   * baseHp; damage × strength^damageExponent) at four anchors: stage 1, boss 10, boss 20 and the area boss.
+   * Normal enemies in between grow evenly; `bend` shapes the part between boss 10 and boss 20 (< 1: strong
+   * soon after boss 10). A boss counts as `combat.bossStageBonus` (area boss `areaBossStageBonus`) stages further.
+   * Each area starts a bit below the previous area boss; area 1 starts low (stage 1 is beatable without points)
+   * and rises quickly (`startBend`). Round 2, 3 …: each round starts where the dragon was.
+   * Fitted to the hero's growth at 65 % fulfilment (user profile): area bosses on day ~13, 32, 49, 69, 92, 117,
+   * 143, 172 (dragon after ~5.7 months; 90 %: ~4.3 months).
    */
   enemies: {
-    baseHp: 56,
-    baseDamage: 6,
-    baseAttackIntervalSec: 1.5,
-    stageHpGrowth: 0.07,
-    stageDamageGrowth: 0.07,
-    areaHpGrowthLinear: 0,
-    areaHpGrowthExponential: 0.44,
-    areaDamageGrowthLinear: 0,
-    areaDamageGrowthExponential: 0.12,
+    baseHp: 95,
+    baseDamage: 13.7,
+    baseAttackIntervalSec: 1,
+    // Straße, Wald, Dunkler Wald, Sumpf, Wüste, Strand, Schnee, Vulkan
+    areas: [
+      { stage1: 0.7, boss10: 1.58, boss20: 3.03, areaBoss: 3.24, bend: 0.57, startBend: 0.45 },
+      { stage1: 2.96, boss10: 4.07, boss20: 4.69, areaBoss: 5.49, bend: 0.72 },
+      { stage1: 5.15, boss10: 6.28, boss20: 7.51, areaBoss: 8.39, bend: 1.29 },
+      { stage1: 7.67, boss10: 9.55, boss20: 10.9, areaBoss: 12.4, bend: 0.56 },
+      { stage1: 11.8, boss10: 14, boss20: 15.7, areaBoss: 17.4, bend: 0.54 },
+      { stage1: 16.4, boss10: 19, boss20: 22.1, areaBoss: 24.8, bend: 1.22 },
+      { stage1: 23.1, boss10: 28.5, boss20: 32.6, areaBoss: 36, bend: 1.19 },
+      { stage1: 33.7, boss10: 39.7, boss20: 44.5, areaBoss: 48.9, bend: 1.6 },
+    ] as { stage1: number; boss10: number; boss20: number; areaBoss: number; bend?: number; startBend?: number }[],
+    damageExponent: 0.5,
   },
 
-  /** Enemy types: multipliers on HP, damage and attack interval (>1 = slower) */
+  /**
+   * Enemy types: multipliers on HP, damage and attack interval (>1 = slower). Feedback v0.5: all types are about
+   * equally hard (otherwise a single "tank" is a wall of several days); they differ in rhythm and in what they test
+   * (tank → Stärke/Tempo, brute/caster → Leben).
+   */
   archetypes: {
     balanced: { hp: 1, damage: 1, interval: 1 },
-    swift: { hp: 0.85, damage: 0.75, interval: 0.65 },
-    brute: { hp: 1.1, damage: 1.5, interval: 1.4 },
-    tank: { hp: 1.3, damage: 1.1, interval: 1.5 },
-    caster: { hp: 0.8, damage: 1.6, interval: 1.25 },
+    swift: { hp: 1, damage: 0.64, interval: 0.65 },
+    brute: { hp: 0.98, damage: 1.36, interval: 1.4 },
+    tank: { hp: 1, damage: 1.2, interval: 1.3 },
+    caster: { hp: 1, damage: 1.19, interval: 1.25 },
   },
 
   /** Equipment and chests. Prices ×2.5 after the feedback to Phase 4 (2–3 chests until the first boss) */
@@ -152,7 +183,7 @@ export const BALANCE = {
       gold: { price: 3750, odds: [10, 35, 40, 13, 2] },
     },
     /** common, uncommon, rare, epic, legendary */
-    rarityFactors: [1, 1.5, 2.2, 3.2, 5],
+    rarityFactors: [1, 1.35, 1.8, 2.4, 3.2],
     /** attribute points of a common level-1 item */
     basePoints: 1.5,
     /** +x per player level at purchase */
@@ -171,24 +202,34 @@ export const BALANCE = {
     /** 1 budget point = this many percent points Krit-Chance */
     critPercentPerPoint: 2,
     /** epic/legendary: extra budget on the slot's own values (no foreign bonus any more) */
-    highRarityBonus: 0.5,
+    highRarityBonus: 0.15,
     sellFraction: 0.25,
   },
 
   /**
-   * Boss rewards (user feedback Phase 4): gold for Zwischenbosse (stage 10/20) and Gebietsbosse (25),
-   * sometimes a chest. Only for the FIRST victory over that boss – after a death the hero starts at the
-   * area start again and must not farm the same bosses.
+   * Boss rewards: gold + a chest for every boss, only for the FIRST victory over that boss (after a death
+   * the hero starts at the area start again and must not farm the same bosses). Feedback v0.5: the chest
+   * is kept until the player picks the slot. Chest per area (round 1 = index 0–7, later rounds use the last row):
+   * iron from the Wald area boss on, from area 3 also for Zwischenbosse; area bosses one chest better;
+   * gold chests from the area boss of area 3 on. The dragon drops `dragonHoard` instead (4 best items).
    */
   bossRewards: {
     goldBoss: 60,
     goldAreaBoss: 150,
     /** × per area, counted over all rounds (Straße R1 = 0 … Vulkan R1 = 7, Straße R2 = 8) */
     goldGrowthPerArea: 1.3,
-    chestBoss: { chance: 0.15, chest: 'wood' as const },
-    chestAreaBoss: { chance: 0.35, chest: 'iron' as const },
-    /** the dragon (area boss of the last area) always drops a gold chest */
-    chestDragon: { chance: 1, chest: 'gold' as const },
+    chests: [
+      { boss: 'wood', areaBoss: 'wood' },
+      { boss: 'wood', areaBoss: 'iron' },
+      { boss: 'iron', areaBoss: 'gold' },
+      { boss: 'iron', areaBoss: 'gold' },
+      { boss: 'iron', areaBoss: 'gold' },
+      { boss: 'gold', areaBoss: 'gold' },
+      { boss: 'gold', areaBoss: 'gold' },
+      { boss: 'gold', areaBoss: 'gold' },
+    ] as { boss: 'wood' | 'iron' | 'gold'; areaBoss: 'wood' | 'iron' | 'gold' }[],
+    /** the dragon: one item per slot of this rarity with the best possible roll */
+    dragonHoard: { rarity: 'legendary' as const },
   },
 
   /** Balancing simulation (npm run simulate) */

@@ -205,6 +205,24 @@ export function itemSpriteKey(slot: Slot, rarity: Rarity): string {
   return `${slot}:${rarity}`;
 }
 
+/** the dragon's hoard (v0.5): an item of the given rarity with the best possible roll (no Tempo split on weapons) */
+export function generateBestItem(slot: Slot, rarity: Rarity, level: number, rng: () => number, balance: Balance, id: string, now: number): Item {
+  const b = balance.items;
+  const budget = itemBudget(rarity, level, balance) * (1 + b.spread) * (isHighRarity(rarity) ? 1 + b.highRarityBonus : 1);
+  const stats = splitBudget(slot, budget, false, balance);
+  return {
+    id,
+    slot,
+    rarity,
+    name: itemName(slot, rarity, isHighRarity(rarity) ? nameStat(slot, stats) : null, rng),
+    spriteKey: itemSpriteKey(slot, rarity),
+    stats,
+    levelAtPurchase: level,
+    chestType: 'gold',
+    acquiredAt: now,
+  };
+}
+
 /** a new item from a chest (rarity, stats, name) */
 export function generateItem(
   slot: Slot,

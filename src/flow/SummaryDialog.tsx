@@ -4,6 +4,13 @@ import { Modal } from '../ui/Sheet';
 
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '±0');
 
+/** what the day's quota did to vitality (60–70 % = normal day) */
+function quotaText(v: number): string {
+  if (v > 0) return `Starker Tag: +${v} Vitalität.`;
+  if (v < 0) return `Weniger als 60 % geschafft: −${-v} Vitalität.`;
+  return 'Normaler Tag: Vitalität bleibt gleich.';
+}
+
 export function SummaryDialog({ result, onClose }: { result: SettlementOutcome; onClose: () => void }) {
   const summaries = result.summaries;
   const yesterday = summaries[summaries.length - 1];
@@ -27,7 +34,19 @@ export function SummaryDialog({ result, onClose }: { result: SettlementOutcome; 
           <div className="summary-date muted">Gestern · {formatDateKey(yesterday.date)}</div>
           <div className="summary-line display">
             {yesterday.doneCount}/{yesterday.totalCount} erledigt
+            {yesterday.totalCount > 0 && ` · ${Math.round((yesterday.doneCount / yesterday.totalCount) * 100)} %`}
           </div>
+          {yesterday.totalCount > 0 && (
+            <p className="summary-quota small">
+              {quotaText(yesterday.quotaVitality)}
+              {yesterday.bonusGold > 0 && (
+                <>
+                  <br />
+                  <span className="gold display">Perfekter Tag! +{yesterday.bonusGold} Gold Bonus</span>
+                </>
+              )}
+            </p>
+          )}
           <div className="summary-stats display">
             <span className="xp">{signed(yesterday.xp)} XP</span>
             <span className="gold">{signed(yesterday.gold)} Gold</span>

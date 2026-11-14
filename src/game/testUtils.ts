@@ -8,12 +8,18 @@ export const NOON = new Date(2026, 10, 5, 12, 0, 0).getTime();
 export const TODAY = '2026-11-05';
 
 /**
- * Balance for mechanics tests: pinned level curve (100 × L^1.2) and penalty
- * factor (3) so the tests don't break whenever balance.ts is re-tuned.
+ * Balance for mechanics tests: pinned level curve (100 × L^1.2), rewards and quota so the tests
+ * don't break whenever balance.ts is re-tuned.
  */
 export const TEST_BALANCE: Balance = withBalance({
   levels: { xpBase: 100, xpExponent: 1.2, xpMaxPerLevel: Number.POSITIVE_INFINITY },
-  vitality: { missedDailyLossPerPoint: 3 },
+  rewards: { dailyXp: 200, dailyGold: 100, habitPlusShare: 0.25, habitPlusVitality: 2, habitTapsPerDay: 1 },
+  habitMinus: { vitalityLossPerPoint: 3, goldLossPerPoint: 5 },
+  vitality: {
+    ...BALANCE.vitality,
+    quota: { neutralFrom: 0.6, neutralTo: 0.7, lossAtZero: 30, gainAtFull: 15 },
+    perfectDayGoldShare: 0.3,
+  },
 });
 
 export function ctx(overrides: Partial<LogicContext> = {}): LogicContext {

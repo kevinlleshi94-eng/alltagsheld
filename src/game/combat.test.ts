@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BALANCE, withBalance } from './balance';
 import {
+  areaScale,
   canBeat,
   effectiveAttributes,
   enemyForStage,
@@ -15,6 +16,7 @@ import {
   startFight,
   stepFight,
   wallIndex,
+  virtualStage,
   type FightEvent,
 } from './combat';
 import { itemPower, rollItemStats, rollRarity } from './items';
@@ -94,10 +96,42 @@ describe('stages', () => {
     }
   });
 
-  it('bosses are much stronger than the stage before', () => {
-    const before = enemyForStage({ round: 1, area: 3, stage: 9 }, BALANCE);
-    const boss = enemyForStage({ round: 1, area: 3, stage: 10 }, BALANCE);
-    expect(boss.maxHp).toBeGreaterThan(before.maxHp * 2);
+  it('every area hits its anchors (stage 1, boss 10, boss 20, area boss)', () => {
+    BALANCE.enemies.areas.forEach((a, i) => {
+      const area = i + 1;
+      expect(areaScale(area, virtualStage(1, BALANCE), BALANCE)).toBeCloseTo(a.stage1, 6);
+      expect(areaScale(area, virtualStage(10, BALANCE), BALANCE)).toBeCloseTo(a.boss10, 6);
+      expect(areaScale(area, virtualStage(20, BALANCE), BALANCE)).toBeCloseTo(a.boss20, 6);
+      expect(areaScale(area, virtualStage(25, BALANCE), BALANCE)).toBeCloseTo(a.areaBoss, 6);
+    });
+  });
+
+  it('a boss is as strong as a normal enemy a few stages further (feedback v0.5)', () => {
+    const c = BALANCE.combat;
+    expect(virtualStage(9, BALANCE)).toBe(8);
+    expect(virtualStage(10, BALANCE)).toBe(9 + c.bossStageBonus);
+    expect(virtualStage(25, BALANCE)).toBe(24 + c.areaBossStageBonus);
+    for (let area = 1; area <= 8; area++) {
+      const at = (stage: number) => areaScale(area, virtualStage(stage, BALANCE), BALANCE);
+      expect(at(10)).toBeGreaterThan(at(9));
+      expect(at(10)).toBeGreaterThan(at(11)); // the enemies right after a boss are easier than the boss
+      expect(at(20)).toBeGreaterThan(at(21));
+      expect(at(25)).toBeGreaterThan(at(24));
+      // each area starts below the previous area boss
+      if (area > 1) expect(at(1)).toBeLessThan(BALANCE.enemies.areas[area - 2].areaBoss);
+    }
+  });
+
+  it('bend and startBend shape the growth between the anchors', () => {
+    const base = BALANCE.enemies.areas[0];
+    const area = (extra: object) =>
+      withBalance({ enemies: { ...BALANCE.enemies, areas: [{ ...base, ...extra }, ...BALANCE.enemies.areas.slice(1)] } } as never);
+    const v15 = virtualStage(15, BALANCE);
+    const even = areaScale(1, v15, area({ bend: 1 }));
+    expect(areaScale(1, v15, area({ bend: 0.5 }))).toBeGreaterThan(even);
+    expect(areaScale(1, v15, area({ bend: 2 }))).toBeLessThan(even);
+    const v4 = virtualStage(4, BALANCE);
+    expect(areaScale(1, v4, area({ startBend: 0.5 }))).toBeGreaterThan(areaScale(1, v4, area({ startBend: 1 })));
   });
 
   it('enemies grow stronger with every stage and round', () => {
@@ -170,15 +204,7 @@ describe('fight engine', () => {
   });
 });
 
-describe('early game (SPEC 11)', () => {
-  it('a fresh level-1 hero gets to stage 9 at most, the first boss stops him', () => {
-    const fresh = heroStatsFromAttributes(attrs(0, 0, 0), false, BALANCE);
-    for (let s = 1; s <= 5; s++) expect(canBeat(fresh, enemyForStage({ round: 1, area: 1, stage: s }, BALANCE), BALANCE)).toBe(true);
-    const wall = wallIndex(fresh, BALANCE);
-    expect(wall).toBeGreaterThanOrEqual(5);
-    expect(wall).toBeLessThanOrEqual(9); // index 9 = stage 10 (first boss)
-  });
-
+describe('early game (feedback v0.5, see BALANCING.md)', () => {
   const winRate = (hero: ReturnType<typeof heroStatsFromAttributes>, stage: number, n = 300) => {
     const enemy = enemyForStage({ round: 1, area: 1, stage }, BALANCE);
     const rng = seededRng(11);
@@ -187,17 +213,25 @@ describe('early game (SPEC 11)', () => {
     return wins / n;
   };
 
-  // feedback Phase 4 (user volume 35 points/day): boss 10 on day 3–4 with level 5 + the first 2–3 chests,
-  // boss 20 about 5 days later (level 8, 4 chests) – see BALANCING.md
-  it('the first boss (stage 10) needs level 5 and the first chests', () => {
-    expect(winRate(heroStatsFromAttributes(attrs(2, 0, 0), false, BALANCE), 10)).toBe(0); // day 1
-    expect(winRate(heroStatsFromAttributes(attrs(4, 0, 0), false, BALANCE), 10)).toBeLessThan(0.1); // level 5, no items
-    expect(winRate(heroStatsFromAttributes(attrs(6, 1, 1), false, BALANCE), 10)).toBeGreaterThan(0.9); // + 2 wood items
+  const build = (strength: number, speed: number, life: number) => heroStatsFromAttributes(attrs(strength, speed, life), false, BALANCE);
+
+  it('a new hero wins the first fight, the next ones need the first attribute points', () => {
+    const fresh = build(0, 0, 0);
+    expect(canBeat(fresh, enemyForStage({ round: 1, area: 1, stage: 1 }, BALANCE), BALANCE)).toBe(true);
+    expect(winRate(fresh, 2)).toBeLessThan(0.1);
+    expect(winRate(build(1, 0, 0), 2)).toBeGreaterThan(0.8); // level 2
+    expect(winRate(build(2, 0, 0), 5)).toBeLessThan(0.2); // day 1 ends around stage 3–5
   });
 
-  it('the second boss (stage 20) needs about a week more', () => {
-    expect(winRate(heroStatsFromAttributes(attrs(6, 1, 1), false, BALANCE), 20)).toBe(0);
-    expect(winRate(heroStatsFromAttributes(attrs(12, 2, 2), false, BALANCE), 20)).toBeGreaterThan(0.8);
+  it('the first boss (stage 10) needs about level 5 and the first item', () => {
+    expect(winRate(build(2, 0, 0), 10)).toBe(0);
+    expect(winRate(build(4, 0, 0), 10)).toBeLessThan(0.2); // level 5 without items
+    expect(winRate(build(6, 1, 1), 10)).toBeGreaterThan(0.9); // + the first items
+  });
+
+  it('the second boss (stage 20) needs much more', () => {
+    expect(winRate(build(6, 2, 2), 20)).toBe(0);
+    expect(winRate(build(14, 3, 3), 20)).toBeGreaterThan(0.9);
   });
 
   it('attribute points move the wall', () => {

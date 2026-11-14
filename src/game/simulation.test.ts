@@ -10,8 +10,12 @@ describe('balancing simulation', () => {
       simulate({ fulfillment, days, seed: 1000 + s, balance: BALANCE, checkpoints: [1, days] }),
     );
 
-  it('reaches level 3 on the first day with good fulfilment', () => {
-    expect(median(run(0.9, 1).map((r) => r[0].level))).toBeGreaterThanOrEqual(3);
+  // feedback v0.5: level-ups almost daily at the start, later every few days
+  it('levels up on the first day and about every 1–2 days in the first week', () => {
+    const r = run(0.65, 7, 5);
+    expect(median(r.map((x) => x[0].level))).toBe(2);
+    expect(median(r.map((x) => x[1].level))).toBeGreaterThanOrEqual(4);
+    expect(median(r.map((x) => x[1].level))).toBeLessThanOrEqual(6);
   });
 
   it('more fulfilment means more progress and fewer deaths', () => {
@@ -24,40 +28,43 @@ describe('balancing simulation', () => {
     expect(deaths(high)).toBe(0);
   });
 
-  // user target (feedback Phase 2): 5 dailies missed + 2 habit "−" every day
-  // → roughly 8 deaths in half a year, but still some progress
-  it('5 missed dailies + 2 habit "−" a day: about 8 deaths in 180 days', () => {
+  // feedback v0.5 (user profile 13 dailies): 5 missed = 62 % → no quota loss, only the 2 "−" (−3 each) hurt
+  it('5 missed dailies + 2 habit "−" a day: a few deaths in 180 days, still progress', () => {
     const runs = Array.from({ length: 3 }, (_, s) =>
-      simulate({
-        fulfillment: 0.6,
-        missedPerDay: 5,
-        habitMinusPerDay: 2,
-        profile: 'seed',
-        days: 180,
-        seed: 2000 + s,
-        balance: BALANCE,
-        checkpoints: [180],
-      }),
+      simulate({ fulfillment: 0.6, missedPerDay: 5, habitMinusPerDay: 2, days: 180, seed: 2000 + s, balance: BALANCE, checkpoints: [180] }),
     );
     const deaths = median(runs.map((r) => r[0].deaths));
-    expect(deaths).toBeGreaterThanOrEqual(4);
-    expect(deaths).toBeLessThanOrEqual(14);
-    expect(median(runs.map((r) => r[0].level))).toBeGreaterThan(8);
+    expect(deaths).toBeGreaterThanOrEqual(1);
+    expect(deaths).toBeLessThanOrEqual(9);
+    expect(median(runs.map((r) => r[0].level))).toBeGreaterThan(20);
   });
 
-  // feedback Phase 4: with the user's volume (15 dailies + 10 habits) the first bosses fall on day 3–4 and 8–9
-  it('user profile: boss 10 on day 3–4 with 2–3 chests, boss 20 about 5 days later', () => {
-    const runs = Array.from({ length: 5 }, (_, s) =>
-      simulateDetailed({ fulfillment: 1, days: 20, seed: 1000 + s, balance: BALANCE, checkpoints: [20] }),
+  // feedback v0.5: below 60 % vitality is lost every day → a bad phase kills the hero within about a week
+  it('bad days (30 %) kill the hero within about a week, 65 % never', () => {
+    const bad = Array.from({ length: 5 }, (_, s) =>
+      simulateDetailed({ fulfillment: 0.3, days: 20, seed: 3000 + s, balance: BALANCE, checkpoints: [20] }),
+    );
+    const firstDeath = median(bad.map((r) => r.days.findIndex((d) => d.deaths > 0) + 1));
+    expect(firstDeath).toBeGreaterThanOrEqual(4);
+    expect(firstDeath).toBeLessThanOrEqual(10);
+    expect(median(run(0.65, 60).map((r) => r[1].deaths))).toBe(0);
+  });
+
+  // feedback v0.5 at 65 %: boss 10 on day 4–6 with the first chests, boss 20 about a week later, area boss ~day 14–16
+  it('user profile at 65 %: first bosses on the planned days', () => {
+    const runs = Array.from({ length: 7 }, (_, s) =>
+      simulateDetailed({ fulfillment: 0.65, days: 25, seed: 1000 + s, balance: BALANCE, checkpoints: [25] }),
     );
     const day = (stage: number) => median(runs.map((r) => r.milestones.find((m) => m.area === 1 && m.stage === stage)?.day ?? 99));
     const chests = (stage: number) => median(runs.map((r) => r.milestones.find((m) => m.area === 1 && m.stage === stage)?.chests ?? -1));
-    expect(day(10)).toBeGreaterThanOrEqual(3);
-    expect(day(10)).toBeLessThanOrEqual(4);
-    expect(chests(10)).toBeGreaterThanOrEqual(2);
+    expect(day(10)).toBeGreaterThanOrEqual(4);
+    expect(day(10)).toBeLessThanOrEqual(6);
+    expect(chests(10)).toBeGreaterThanOrEqual(1);
     expect(chests(10)).toBeLessThanOrEqual(3);
-    expect(day(20) - day(10)).toBeGreaterThanOrEqual(4);
-    expect(day(20) - day(10)).toBeLessThanOrEqual(7);
+    expect(day(20)).toBeGreaterThanOrEqual(9);
+    expect(day(20)).toBeLessThanOrEqual(14);
+    expect(day(25)).toBeGreaterThanOrEqual(12);
+    expect(day(25)).toBeLessThanOrEqual(18);
   });
 
   it('is deterministic for a fixed seed', () => {

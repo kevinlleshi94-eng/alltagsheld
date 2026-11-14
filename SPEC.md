@@ -42,15 +42,16 @@ Es gibt genau **zwei Aufgabentypen**:
 
 ### 2.1 Tägliche Aufgaben (Dailies)
 - Gelten **jeden Tag** (keine Wochentags-Regeln).
-- Felder: Titel, **Punkte** (ganzzahlig 1–10, von mir selbst festgelegt), Reihenfolge, archiviert ja/nein.
+- Felder: Titel, Reihenfolge, archiviert ja/nein. **Seit v0.5 sind alle täglichen Aufgaben gleich viel wert** (Feedback: „alle Aufgaben gleich viel Wert“); das alte Feld „Punkte“ bleibt im Datenmodell, spielt aber keine Rolle mehr.
 - Abhaken → sofort Belohnung (siehe 4.1). Wieder abwählen am selben Tag → Belohnung wird zurückgenommen.
-- Nicht erledigt beim Tageswechsel → **Strafe** (siehe 5).
+- Bei der Tagesabrechnung zählt die **Quote** (erledigte / alle täglichen Aufgaben, siehe 5).
 
 ### 2.2 Gewohnheiten (Habits)
-- Beliebig oft pro Tag antippbar. Jede Gewohnheit hat einen **Plus-Button**, einen **Minus-Button** oder beide.
-- Felder: Titel, Plus-Punkte (0–10), Minus-Punkte (0–10), Reihenfolge, archiviert.
-- Beispiel: „Selbst gekocht“ (+1), „Fertigessen bestellt“ (−1).
-- Jeder Tipp wird mit Zeitstempel geloggt. Rückgängig-Funktion (letzten Tipp des Tages entfernen).
+- Jede Gewohnheit hat einen **Plus-Button**, einen **Minus-Button** oder beide.
+- **Seit v0.5 zählt jede Gewohnheit höchstens 1× am Tag** (Plus und Minus teilen sich diesen einen Tipp). Danach ist sie für heute erledigt.
+- Felder: Titel, Plus-Button an/aus, **Minus-Stärke** (0–10, 0 = kein Minus-Button), Reihenfolge, archiviert.
+- Beispiel: „Selbst gekocht“ (+), „Fertigessen bestellt“ (−1).
+- Jeder Tipp wird mit Zeitstempel geloggt. Rückgängig-Funktion (Tipp des Tages entfernen, danach wieder antippbar).
 
 ### 2.3 Verwaltung
 - Aufgaben anlegen, bearbeiten, löschen (mit Bestätigung), archivieren, per Drag & Drop sortieren.
@@ -108,13 +109,16 @@ Tageswechsel ist **Mitternacht (lokale Zeit)**. Beim Öffnen der App (Kaltstart 
 
 ## 4. Belohnungen & Fortschritt
 
-### 4.1 Belohnung pro Aufgabe (Startwerte in `balance.ts`)
-- Tägliche Aufgabe abgehakt / Gewohnheit „+“: **XP = Punkte × 10**, **Gold = Punkte × 5**, **Vitalität + Punkte × 1** (Heilung).
-- Gewohnheit „−“: **Vitalität − Punkte × 3**, **Gold − Punkte × 5** (Gold nie unter 0). Kein XP-Verlust.
-- Kurzes visuelles Feedback beim Abhaken („+20 XP“, „+10 Gold“ fliegen hoch).
+### 4.1 Belohnung pro Aufgabe (Werte in `balance.ts`, Stand v0.5)
+- **Tagesbudget:** Alle täglichen Aufgaben zusammen bringen **200 XP und 100 Gold**. Jede Aufgabe bekommt den **gleichen Anteil**
+  (13 Aufgaben → je 15 XP und 8 Gold). Mehr Aufgaben bringen also nicht mehr XP. Abhaken heilt keine Vitalität (die kommt aus der Quote, siehe 5).
+- **Gewohnheit „+“** (1× am Tag): kleiner Bonus – alle „+“-Gewohnheiten zusammen sind 25 % des Tagesbudgets wert (4 Gewohnheiten → je 13 XP und 6 Gold), dazu **+2 Vitalität**.
+- **Gewohnheit „−“** (1× am Tag): **Vitalität − Stärke × 3**, **Gold − Stärke × 5** (Gold nie unter 0). Kein XP-Verlust.
+- **Perfekter Tag** (alle täglichen Aufgaben erledigt): zusätzlich **30 % des Tagesgolds** (30 Gold) bei der Abrechnung.
+- Kurzes visuelles Feedback beim Abhaken („+15 XP“, „+8 Gold“ fliegen hoch).
 
 ### 4.2 Level
-- XP-Bedarf für das nächste Level: Startwert `100 × Level^1.2` (per Simulation feinjustieren, siehe 11).
+- XP-Bedarf für das nächste Level: `min(520, 80 × Level^0,9)` (Stand v0.5: anfangs fast jeden Tag ein Level, ab Level 8 alle 3–4 Tage; siehe BALANCING.md).
 - **Pro Level-Up 1 Attributpunkt.** Popup mit Effekt und Sound: Ich wähle eins von drei Attributen:
   - **Stärke** → mehr Schaden pro Treffer
   - **Angriffsgeschwindigkeit** → kürzere Zeit zwischen Angriffen
@@ -125,7 +129,9 @@ Tageswechsel ist **Mitternacht (lokale Zeit)**. Beim Öffnen der App (Kaltstart 
 ### 4.3 Gold
 - Wird nur für den Shop verwendet (siehe 7).
 - **XP gibt es ausschließlich für echte Aufgaben.** Normale Gegner geben nur Spielfortschritt – im Spiel kann man nicht „farmen“.
-- **Ausnahme Bosse** (Feedback Phase 4): Der **erste** Sieg über einen Zwischenboss (Stufe 10/20) oder Gebietsboss (Stufe 25) gibt Gold und mit etwas Glück eine Truhe (Zwischenboss 15 % Holz, Gebietsboss 35 % Eisen, Drache immer Gold). Nach einem Tod gibt derselbe Boss nichts mehr.
+- **Ausnahme Bosse** (Feedback Phase 4, geändert in v0.5): Der **erste** Sieg über einen Zwischenboss (Stufe 10/20) oder Gebietsboss (Stufe 25) gibt Gold und **immer eine Truhe**.
+  Den Platz wähle ich selbst; bis dahin wartet die Truhe im Shop unter „Boss-Beute“. Truhenart je Gebiet: Holz am Anfang, Eisen ab dem Wald-Gebietsboss, **Gold ab dem Gebietsboss des Dunklen Walds** (Tabelle in BALANCING.md).
+  Der **Drache** lässt stattdessen die **4 besten Gegenstände** fallen (je Platz ein legendäres Teil mit Bestwert). Nach einem Tod gibt derselbe Boss nichts mehr.
 
 ---
 
@@ -133,10 +139,13 @@ Tageswechsel ist **Mitternacht (lokale Zeit)**. Beim Öffnen der App (Kaltstart 
 
 Neben den Kampf-Lebenspunkten gibt es eine dauerhafte Ressource **Vitalität** (max. 100), sichtbar in der Statusleiste. Sie spiegelt meine Disziplin im echten Leben.
 
-- **Nicht erledigte tägliche Aufgabe** (bei der Tagesabrechnung): **Vitalität − Punkte × 1,5** (geändert nach dem Feedback zu Phase 2, vorher × 3; halbe Punkte werden pro Tag gerundet).
-  - Mit den Startaufgaben (22 Punkte gesamt) kostet ein komplett verpasster Tag 33 Vitalität → **vier komplett verpasste Tage = Tod**.
-  - Heilung über erledigte Aufgaben (Punkte × 1) gleicht Verluste nur aus, wenn ich **mindestens ~60 %** meiner täglichen Punkte schaffe. Darunter sinkt die Vitalität langfristig.
-  - Ziel: Wer jeden Tag 5 Aufgaben verpasst und 2× eine Gewohnheit „−“ tippt, stirbt etwa 8-mal im halben Jahr.
+- **Tagesquote** (seit v0.5, bei der Tagesabrechnung): erledigte ÷ alle täglichen Aufgaben, **nach Anzahl** gezählt. Sie ändert **nur die Vitalität**:
+  - **unter 60 %: immer Verlust**, linear von −30 (0 %) bis −1 (knapp unter 60 %)
+  - **60–70 %: ±0** (ein normaler Tag)
+  - **über 70 %: Gewinn**, linear bis **+15** bei 100 % (100 % gibt zusätzlich Bonus-Gold, siehe 4.1)
+  - Ein komplett verpasster Tag kostet 30 Vitalität → **vier komplett verpasste Tage = Tod**; eine schlechte Phase (30 %) etwa nach einer Woche.
+  - Der Verlust wird auf die verpassten Aufgaben verteilt (fürs Tageslog), die Summe bleibt ganzzahlig.
+- Gewohnheit „−“ kostet weiterhin Stärke × 3 Vitalität (siehe 4.1), „+“ heilt 2.
 - **Erschöpft:** Vitalität unter 30 % → **−25 % Schaden im Kampf**. Sichtbar am Avatar (z. B. schwerer Gang, rötliche Vignette, Hinweis „Erschöpft“).
 - **Tod** bei Vitalität ≤ 0 – eigener, dramatischer Bildschirm („Du bist gefallen …“). Folgen:
   1. **−1 Level**, XP im neuen Level auf 0. Der **zuletzt vergebene Attributpunkt** wird entfernt (bei aufgehobenem Punkt: dieser zuerst).
@@ -144,7 +153,7 @@ Neben den Kampf-Lebenspunkten gibt es eine dauerhafte Ressource **Vitalität** (
   3. **Ein zufälliges angelegtes Ausrüstungsteil geht kaputt** (wird gelöscht).
   4. **Zurück zum Anfang des aktuellen Gebiets** (Stufe 1 des Gebiets).
   5. Vitalität wird wieder auf 100 % gesetzt.
-- Alle Werte (Faktor 3, 30 %-Grenze, −25 %, Todesfolgen einzeln ein-/ausschaltbar) in `balance.ts`.
+- Alle Werte (Quote, 30 %-Grenze, −25 %, Todesfolgen einzeln ein-/ausschaltbar) in `balance.ts`.
 
 ---
 
@@ -173,9 +182,12 @@ Neben den Kampf-Lebenspunkten gibt es eine dauerhafte Ressource **Vitalität** (
   - Angriffsintervall = 1,2 s / (1 + 0,06 × Angriffsgeschwindigkeit + Ausrüstung), min. 0,25 s
   - Kritische Treffer: 10 % Chance + Krit-Chance der Ausrüstung (Schild, max. 60 %), ×1,5 Schaden
 - **Gegner**
-  - Werte wachsen mit der Stufe (+7 % pro Stufe auf LP und Schaden, Stand Phase 4; Formeln in BALANCING.md). Jeder Gegnertyp hat eigene Eigenschaften (z. B. Wölfe schnell & schwach, Golems langsam & zäh).
-  - **Boss** auf jeder 10. Stufe: ×3 LP, ×1,5 Schaden, **Timer 10 s**, größer dargestellt, eigener Auftritt (Boss-Banner + Sound).
-  - **Gebietsboss** auf Stufe 25: ×2,5 LP (auf der höheren Stufe), ×1,5 Schaden, **Timer 10 s**.
+  - Stärke je Gebiet über vier Ankerpunkte (Stufe 1, Boss 10, Boss 20, Gebietsboss), dazwischen gleichmäßiges Wachstum (Stand v0.5, per Simulation angepasst; Formeln in BALANCING.md).
+    Schaden wächst mit der Wurzel der Stärke, Gegner greifen etwa jede Sekunde an – Leben ist damit ein echtes Attribut.
+  - Gegnertypen sind **gleich schwer**, unterscheiden sich aber im Rhythmus (z. B. Wölfe schnell & schwach, Golems langsam & hart zuschlagend).
+  - **Boss** auf jeder 10. Stufe: so stark wie ein normaler Gegner **3 Stufen weiter**, **Timer 10 s**, größer dargestellt, eigener Auftritt (Boss-Banner + Sound). Die Gegner direkt danach sind leicht.
+  - **Gebietsboss** auf Stufe 25: wie ein Gegner **4,5 Stufen weiter**, **Timer 10 s**.
+  - Ein neuer Held (ohne Attributpunkte) gewinnt den ersten Kampf, danach braucht er die ersten Level-Ups.
   - Timer überall 10 s (Nutzer-Feedback Phase 2, ursprünglich 15/20 s).
 
 ### 6.4 Welt: 8 Gebiete × 25 Stufen
@@ -213,7 +225,7 @@ Beim ersten Start: Name, Körpertyp, Hautfarbe, Frisur, Haarfarbe. Start-Ausrüs
 - Helm (Kopf) → nur Angriffsgeschwindigkeit
 - Rüstung (Körper) → Leben
 - Schild → Leben und kritische Trefferchance
-- Episch und Legendär sind deutlich stärker (+50 %) und tragen den Hauptwert im Namen („… der Präzision“).
+- Episch und Legendär sind stärker (+15 % auf den Seltenheitsfaktor, seit v0.5) und tragen den Hauptwert im Namen („… der Präzision“).
 
 ### 7.3 Shop mit Zufallstruhen
 - Ich wähle den **Platz** (Kopf/Körper/Waffe/Schild) und die **Truhe**. Werte und Seltenheit sind **zufällig**; das Aussehen am Helden ergibt sich aus Platz + Seltenheit (je Seltenheit ein sichtbar anderes Teil).
@@ -227,7 +239,7 @@ Beim ersten Start: Name, Körpertyp, Hautfarbe, Frisur, Haarfarbe. Start-Ausrüs
 
 - Preise ×2,5 nach dem Feedback zu Phase 4 (2–3 Truhen bis zum ersten Zwischenboss, siehe BALANCING.md).
 - Seltenheitsfarben: grau, grün, blau, lila, orange – **nur für Schrift/Rahmen**, das Item-Bild zeigt das echte Material wie im Kampf. Episch/Legendär mit leichtem Glanz-/Partikeleffekt am Avatar.
-- **Itemwerte skalieren mit Seltenheit** (Startfaktoren 1 / 1,5 / 2,2 / 3,2 / 5) **und meinem Level beim Kauf**, damit Truhen auch später relevant bleiben. Leichte Zufallsstreuung (±15 %).
+- **Itemwerte skalieren mit Seltenheit** (Faktoren 1 / 1,35 / 1,8 / 2,4 / 3,2, seit v0.5 enger, damit Glück den Fortschritt nicht zu stark bestimmt) **und meinem Level beim Kauf**, damit Truhen auch später relevant bleiben. Leichte Zufallsstreuung (±15 %).
 - Generierte Namen, z. B. „Rostiges Kurzschwert“, „Verstärkter Lederhelm“, „Legendärer Drachenschuppenpanzer“.
 - **Truhen-Öffnungsanimation** (Wackeln → Aufspringen → Lichtstrahl in Seltenheitsfarbe).
 - Danach: „Anlegen“ oder „Ins Inventar“. Vergleich mit dem aktuell angelegten Teil (Werte grün/rot). Das Item ist ab dem Kauf gespeichert (im Inventar) – wird die App mitten in der Animation geschlossen, geht nichts verloren.
@@ -269,13 +281,17 @@ Eigener Bildschirm mit freigeschalteten und gesperrten Erfolgen (gesperrte zeige
 
 ## 11. Balancing (Pflicht)
 
-Schreibe ein **Simulationsskript** (`npm run simulate`), das mit den Startaufgaben 30 / 90 / 180 Tage durchspielt – bei 50 %, 75 %, 90 % und 100 % täglicher Erfüllung, inklusive Shopkäufen (einfache Strategie: immer beste leistbare Truhe für den schwächsten Platz) und optimaler Attributverteilung. Ausgabe als Tabelle: Level, erreichte Stufe/Gebiet, Tode, Gold. Seit dem Feedback zu Phase 4 rechnet die Simulation standardmäßig mit meinem echten Umfang (15 tägliche Aufgaben + 10 positive Gewohnheiten) und gibt zusätzlich die Tage bis zu jedem Boss samt Truhenzahl aus.
+Schreibe ein **Simulationsskript** (`npm run simulate`), das mit den Startaufgaben 30 / 90 / 180 Tage durchspielt – bei 50 %, 75 %, 90 % und 100 % täglicher Erfüllung, inklusive Shopkäufen (einfache Strategie: immer beste leistbare Truhe für den schwächsten Platz) und optimaler Attributverteilung. Ausgabe als Tabelle: Level, erreichte Stufe/Gebiet, Tode, Gold. Seit v0.5 rechnet die Simulation mit meinem echten Umfang (13 tägliche Aufgaben, 4 „+“- und 3 „−“-Gewohnheiten, 3–4 Tipps am Tag) bei 100 / 90 / 80 / 65 / 50 / 30 % und gibt die Tage bis zu jedem Boss samt Truhenzahl aus.
+
+**Zielwerte seit v0.5** (Feedback „Balancing“, Maßstab 65 % Erfüllung): Tag 1 Stufe 3–4, Tag 2 Stufe 6–8, Boss 10 nach 3–4 Tagen erreicht und nach 2–3 Tagen besiegt, danach 3–4 leichte Gegner, Wände von 1–2 Tagen,
+Boss 20 2–3 Tage, Gebietsboss 3–4 Tage, spätere Gebiete länger. **Drache nach etwa 6 Monaten** (90 %: etwa 4 Monate). Level-Ups anfangs fast täglich, ab Level 8 alle 3–4 Tage.
+Die ursprünglichen Zielwerte unten gelten nicht mehr.
 
 **Zielwerte** – passe die Formeln in `balance.ts` an, bis sie ungefähr erreicht werden:
 - 90 % Erfüllung: Drache (Ende Gebiet 8) nach ca. **5–6 Monaten**.
 - 75 % Erfüllung: deutlich langsamer, ca. Gebiet 5–6 nach 6 Monaten.
 - 50 % Erfüllung: regelmäßige Tode, kaum Fortschritt über Gebiet 2–3 hinaus.
-- Erste Level-Ups schnell (Level 3 am ersten Tag bei guter Erfüllung), danach spürbar langsamer.
+- Erste Level-Ups schnell (Level 3 am ersten Tag bei guter Erfüllung), danach spürbar langsamer. (Seit v0.5: Level 2 am ersten Tag, Level 6 nach einer Woche.)
 - Am Anfang sollen die ersten ~5 Stufen ohne jeden Fortschritt schaffbar sein (Erfolgserlebnis), danach entsteht eine natürliche „Wand“, die nur durch echte Aufgaben überwunden wird.
 
 Dokumentiere die finalen Werte und Ergebnisse in `BALANCING.md`.

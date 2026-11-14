@@ -1016,6 +1016,94 @@ h3 {
   background: #8f2a20;
 }
 
+.habit-btn:disabled {
+  opacity: 0.35;
+  filter: grayscale(0.6);
+  transform: none;
+}
+
+.habit-row.tapped-plus {
+  border-color: #2f5a1f;
+}
+
+.habit-row.tapped-minus {
+  border-color: #6a2018;
+}
+
+/* today's quota (feedback v0.5): 60–70 % neutral, below = vitality loss, above = gain */
+.quota {
+  margin: 0 0 8px;
+}
+
+.quota-bar {
+  position: relative;
+  height: 10px;
+  background: linear-gradient(
+    90deg,
+    #4a1a14 0%,
+    #4a1a14 60%,
+    #3a3220 60%,
+    #3a3220 70%,
+    #1f3a18 70%,
+    #1f3a18 100%
+  );
+  border: 2px solid var(--border-dark);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.quota-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--muted);
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.quota-loss .quota-fill {
+  background: var(--danger);
+}
+
+.quota-neutral .quota-fill {
+  background: var(--gold);
+}
+
+.quota-gain .quota-fill {
+  background: var(--vit);
+}
+
+.quota-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.quota-text {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.quota-loss .quota-text b {
+  color: #ff9a8e;
+}
+
+.quota-neutral .quota-text b {
+  color: var(--text);
+}
+
+.quota-gain .quota-text b {
+  color: var(--vit);
+}
+
+.quota-text b.gold {
+  color: var(--gold);
+}
+
 .icon-btn {
   width: 40px;
   height: 40px;
@@ -1602,23 +1690,24 @@ input[type='range'] {
   margin-top: 8px;
 }
 
-.counter {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.review-tap {
+  min-height: 40px;
+  padding: 6px 14px;
+  font: 600 15px var(--display);
+  color: var(--muted);
+  background: var(--panel2);
+  border: 2px solid var(--border-dark);
+  border-radius: 4px;
 }
 
-.counter-label {
-  width: 18px;
-  font-size: 20px;
+.review-tap.plus.on {
+  color: #fff;
+  background: #3f7a2a;
 }
 
-.counter.plus .counter-label {
-  color: var(--vit);
-}
-
-.counter.minus .counter-label {
-  color: #ff9a8e;
+.review-tap.minus.on {
+  color: #fff;
+  background: #8f2a20;
 }
 
 .modal {
@@ -1713,6 +1802,15 @@ input[type='range'] {
 .summary-line {
   font-size: 24px;
   margin: 4px 0 8px;
+}
+
+.summary-quota {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+
+.summary-quota .gold {
+  color: var(--gold);
 }
 
 .summary-stats {
@@ -2179,4 +2277,22 @@ input[type='range'] {
 
 .modal-actions:empty {
   display: none;
+}
+
+/* kept boss chest (feedback v0.5) */
+.boss-chest-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.boss-chest-name {
+  font-size: 20px;
+}
+
+.boss-chest-modal .modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }

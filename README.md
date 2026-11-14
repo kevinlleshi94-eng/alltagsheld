@@ -3,7 +3,7 @@
 Private Habit-Tracking-App mit Fantasy-Auto-Battler. Echte Aufgaben erledigen → abhaken → XP & Gold → der Held wird stärker.
 Läuft als PWA auf dem iPhone, alle Daten bleiben lokal auf dem Gerät.
 
-> Aktueller Stand: **Phase 4 – Shop & Ausrüstung** (Version 0.4.1, mit Feedback-Runde). Aufgaben, Abrechnung und Auto-Battler laufen, Held und Gegner haben echte Pixel-Sprites (LPC / OpenGameArt, siehe CREDITS.md). Gold kaufst du in Truhen um, Bosse geben beim ersten Sieg Gold und manchmal eine Truhe. Die Ausrüstung macht den Helden stärker und ist am Helden sichtbar. Streaks, Haustiere, Erfolge und Statistik folgen in Phase 5.
+> Aktueller Stand: **Balancing-Runde v0.5** (Version 0.5.0). Aufgaben, Abrechnung und Auto-Battler laufen, Held und Gegner haben echte Pixel-Sprites (LPC / OpenGameArt, siehe CREDITS.md). Alle täglichen Aufgaben teilen sich ein festes Tagesbudget an XP und Gold, die Tagesquote entscheidet über die Vitalität. Gold kaufst du in Truhen um, jeder Boss gibt beim ersten Sieg Gold und eine Truhe (Platz frei wählbar), der Drache seinen Schatz. Die Ausrüstung macht den Helden stärker und ist am Helden sichtbar. Streaks, Haustiere, Erfolge und Statistik folgen in Phase 5.
 
 ---
 

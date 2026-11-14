@@ -44,6 +44,11 @@ export function migrateSnapshot(snapshot: Snapshot): Snapshot {
     data = { ...data, items: data.items.map((i) => convertLegacyItem(i, BALANCE)) };
     version = 4;
   }
+  if (version === 4) {
+    // v5: kept boss chests
+    data = { ...data, player: { ...data.player, pendingChests: data.player.pendingChests ?? [] } };
+    version = 5;
+  }
   if (version !== SCHEMA_VERSION) {
     throw new Error(`Backup-Version ${snapshot.schemaVersion} kann nicht migriert werden.`);
   }

@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BALANCE } from '../game/balance';
+import { dailyReward, habitPlusReward, quotaEffect } from '../game/resources';
 import { addDays } from '../game/dates';
 import { clock } from '../lib/clock';
 import { createSnapshot, parseSnapshot, restoreSnapshot } from './backup';
@@ -18,6 +19,7 @@ import {
   equipItemById,
   getPendingDays,
   getPlayer,
+  openBossChest,
   recordVictory,
   reorderTasks,
   resetGame,
@@ -65,28 +67,36 @@ describe('first start', () => {
 });
 
 describe('today actions', () => {
-  it('toggling a daily rewards and reverts', async () => {
-    const [sleep] = await dailies();
+  it('toggling a daily rewards and reverts (every daily the same share)', async () => {
+    const [sleep, , bed] = await dailies();
+    const share = dailyReward(13, BALANCE);
     const r = await toggleDaily(sleep.id);
-    expect(r.applied).toEqual({ xp: 30, gold: 15, vitality: 0 });
-    expect(await getPlayer()).toMatchObject({ xp: 30, gold: 15 });
+    expect(r.applied).toEqual(share);
+    expect(await getPlayer()).toMatchObject({ xp: share.xp, gold: share.gold });
+    expect((await toggleDaily(bed.id)).applied).toEqual(share);
+    await toggleDaily(bed.id);
     expect((await db.dayLogs.get([todayKey(), sleep.id]))?.done).toBe(true);
     await toggleDaily(sleep.id);
     expect(await getPlayer()).toMatchObject({ xp: 0, gold: 0 });
     expect((await db.dayLogs.get([todayKey(), sleep.id]))?.done).toBe(false);
   });
 
-  it('habit taps are logged and undoable', async () => {
+  it('habit taps count once per day, are logged and undoable', async () => {
     const [cook, order] = await habits();
+    const plus = habitPlusReward(1, BALANCE);
     await tapHabitToday(cook.id, 'plus');
     await tapHabitToday(cook.id, 'plus');
     await tapHabitToday(order.id, 'minus');
-    expect(await getPlayer()).toMatchObject({ xp: 20, gold: 5, vitality: 97 });
+    const minusGold = BALANCE.habitMinus.goldLossPerPoint;
+    const minusVit = BALANCE.habitMinus.vitalityLossPerPoint;
+    expect(await getPlayer()).toMatchObject({ xp: plus.xp, gold: plus.gold - minusGold, vitality: 100 - minusVit });
     await undoHabitToday(order.id);
-    expect(await getPlayer()).toMatchObject({ xp: 20, gold: 10, vitality: 100 });
+    expect(await getPlayer()).toMatchObject({ xp: plus.xp, gold: plus.gold, vitality: 100 });
     const log = await db.dayLogs.get([todayKey(), cook.id]);
-    expect(log?.plusCount).toBe(2);
-    expect(log?.taps).toHaveLength(2);
+    expect(log?.plusCount).toBe(1);
+    expect(log?.taps).toHaveLength(1);
+    // after the undo the "−" habit can be tapped again
+    expect((await tapHabitToday(order.id, 'minus')).applied.vitality).toBe(-minusVit);
   });
 
   it('a lethal "−" tap triggers death', async () => {
@@ -99,9 +109,9 @@ describe('today actions', () => {
 });
 
 describe('day change', () => {
-  it('advancing the clock creates a pending day, settlement applies penalties', async () => {
+  it('advancing the clock creates a pending day, settlement applies the quota', async () => {
     const list = await dailies();
-    await toggleDaily(list[0].id); // 3 points done today
+    await toggleDaily(list[0].id);
     await devAdvanceDays(1);
     expect(todayKey()).toBe('2026-11-06');
     expect(await getPendingDays()).toEqual(['2026-11-05']);
@@ -111,10 +121,11 @@ describe('day change', () => {
       checkedDailyIds: [list[1].id], // +2 points via review
       habitTaps: {},
     });
-    expect(result?.summaries[0]).toMatchObject({ doneCount: 2, totalCount: 13, donePoints: 5 });
-    // heal capped at 100; penalty = 17 missed points × factor (rounded per day)
-    const penalty = Math.round(17 * BALANCE.vitality.missedDailyLossPerPoint);
-    expect(await getPlayer()).toMatchObject({ vitality: 100 - penalty, lastSettledDate: '2026-11-05' });
+    // 2 of 13 done (15 %) → vitality loss from the quota
+    const effect = quotaEffect(2, 13, BALANCE);
+    expect(effect.vitality).toBeLessThan(0);
+    expect(result?.summaries[0]).toMatchObject({ doneCount: 2, totalCount: 13, quotaVitality: effect.vitality, penalty: -effect.vitality });
+    expect(await getPlayer()).toMatchObject({ vitality: 100 + effect.vitality, lastSettledDate: '2026-11-05' });
     expect(await getPendingDays()).toEqual([]);
     expect(await db.dayLogs.where('date').equals('2026-11-05').count()).toBe(13);
     // a second run is a no-op
@@ -179,7 +190,7 @@ describe('backup', () => {
     expect(clock.getOffset()).toBe(0);
 
     await restoreSnapshot(parseSnapshot(json));
-    expect((await getPlayer()).xp).toBe(30);
+    expect((await getPlayer()).xp).toBe(dailyReward(13, BALANCE).xp);
     expect(await db.dayLogs.count()).toBe(1);
     expect(clock.getOffset()).toBe(86_400_000);
     expect(await getPendingDays()).toEqual(['2026-11-05']);
@@ -220,10 +231,12 @@ describe('combat progress', () => {
     const p = await getPlayer();
     expect(p).toMatchObject({ round: 2, area: 1, stage: 1 });
     expect(p.progress).toMatchObject({ bossesDefeated: 1, dragonsDefeated: 1, highestStageIndex: 200 });
-    // the dragon always drops a gold chest (item lands in the inventory)
-    expect(r?.reward?.drop?.chest).toBe('gold');
-    expect(await db.items.get(r!.reward!.drop!.item.id)).toEqual(r!.reward!.drop!.item);
-    expect(Object.values(p.equipped)).not.toContain(r!.reward!.drop!.item.id);
+    // the dragon drops the best item for every slot (into the inventory)
+    const hoard = r!.reward!.hoard;
+    expect(r?.reward?.chest).toBeNull();
+    expect(hoard.map((i) => i.rarity)).toEqual(['legendary', 'legendary', 'legendary', 'legendary']);
+    for (const item of hoard) expect(await db.items.get(item.id)).toEqual(item);
+    expect(Object.values(p.equipped).every((id) => id === null)).toBe(true);
   });
 
   it('a boss gives gold only the first time (feedback Phase 4)', async () => {
@@ -237,6 +250,24 @@ describe('combat progress', () => {
     expect(again?.kind).toBe('boss');
     expect(again?.reward).toBeNull();
     expect((await getPlayer()).gold).toBe(BALANCE.bossRewards.goldBoss);
+    expect((await getPlayer()).pendingChests).toHaveLength(1);
+  });
+
+  it('a boss chest is kept until the slot is chosen', async () => {
+    await devSetStage(1, 1, 10);
+    const r = await recordVictory({ round: 1, area: 1, stage: 10 });
+    const pending = r!.reward!.chest!;
+    expect(pending.chest).toBe('wood');
+    expect((await getPlayer()).pendingChests).toEqual([pending]);
+    expect(await db.items.count()).toBe(0);
+
+    const opened = await openBossChest(pending.id, 'body');
+    expect(opened).toMatchObject({ chest: 'wood', current: null, item: { slot: 'body', chestType: 'wood' } });
+    expect(await db.items.get(opened.item.id)).toEqual(opened.item);
+    const p = await getPlayer();
+    expect(p.pendingChests).toEqual([]);
+    expect(p.equipped.body).toBeNull();
+    await expect(openBossChest(pending.id, 'body')).rejects.toThrow('Truhe nicht gefunden');
   });
 
   it('normal enemies give nothing', async () => {
@@ -278,6 +309,39 @@ describe('shop', () => {
   it('does not buy without enough gold', async () => {
     await expect(buyChestItem('head', 'wood')).rejects.toThrow('Nicht genug Gold');
     expect(await db.items.count()).toBe(0);
+  });
+});
+
+describe('schema v5', () => {
+  it('adds the kept boss chests to a v4 backup', async () => {
+    const snapshot = await createSnapshot();
+    const { pendingChests: _drop, ...v4Player } = snapshot.data.player;
+    const v4 = { ...snapshot, schemaVersion: 4, data: { ...snapshot.data, player: v4Player } };
+    await restoreSnapshot(parseSnapshot(JSON.stringify(v4)));
+    expect((await getPlayer()).pendingChests).toEqual([]);
+  });
+
+  it('adds the kept boss chests in an existing v4 database', async () => {
+    const name = 'alltagsheld-upgrade-v5-test';
+    await Dexie.delete(name);
+    const v4 = new Dexie(name);
+    v4.version(4).stores({
+      tasks: 'id, type, order',
+      dayLogs: '[date+taskId], date, taskId',
+      player: 'id',
+      items: 'id, slot',
+      achievements: 'id',
+      settings: 'id',
+    });
+    const { pendingChests: _drop, ...v4Player } = await getPlayer();
+    await v4.table('player').put(v4Player);
+    v4.close();
+
+    const upgraded = new AlltagsheldDB(name);
+    expect((await upgraded.player.get('player'))?.pendingChests).toEqual([]);
+    expect(upgraded.verno).toBe(SCHEMA_VERSION);
+    upgraded.close();
+    await Dexie.delete(name);
   });
 });
 

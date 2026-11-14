@@ -1,7 +1,7 @@
 # Balancing – Alltagsheld
 
 Alle Zahlen stehen in `src/game/balance.ts`. Dieses Dokument beschreibt, wie sie zustande kommen,
-und hält das Ergebnis der Simulation fest (SPEC §11). Stand: v0.4.1, nach dem Feedback zu Phase 4.
+und hält das Ergebnis der Simulation fest (SPEC §11). Stand: **v0.5.0**, nach dem Balancing-Feedback.
 
 ```bash
 npm run simulate                 # Tabellen, 240 Tage, 7 Durchläufe je Szenario
@@ -12,60 +12,128 @@ npm run simulate -- --markdown   # Ausgabe als Markdown-Tabelle (wie unten)
 ## Simulationsmodell
 
 Die Simulation (`src/game/simulation.ts`) nutzt **dieselben Funktionen wie die App**: Abhaken, Gewohnheiten,
-Tagesabrechnung, Strafen, Tod, Level-Up, Kampf-Engine, Truhen und Boss-Belohnungen.
+Tagesabrechnung mit Quote, Tod, Level-Up, Kampf-Engine, Truhen und Boss-Belohnungen.
 
-- **Dein Profil** (Standard seit Phase 4):
-  - 15 tägliche Aufgaben mit zusammen 25 Punkten (3, 3, 2, 2, 2, 2, 2, 2 und 7× 1)
-  - 10 positive Gewohnheiten mit je 1 Punkt
-  - 1 negative Gewohnheit
-
-  Ein perfekter Tag bringt **35 Punkte = 350 XP und 175 Gold**.
-- **Erfüllung:** Jede Aufgabe und jede „+“-Gewohnheit wird mit dieser Wahrscheinlichkeit erledigt.
-  Die „−“-Gewohnheit wird mit der Gegenwahrscheinlichkeit getippt.
-- **Szenario „5 verpasst + 2× −“:** Es rechnet weiter mit den 13 Startaufgaben (22 Punkte), damit es mit den Zahlen von vorher vergleichbar bleibt.
-  Dort fehlen genau 5 zufällige Aufgaben pro Tag, dazu kommen 2× „−“.
+- **Dein Profil** (aus deinem Backup vom 14.11.2026):
+  - 13 tägliche Aufgaben
+  - 4 positive und 3 negative Gewohnheiten (Stärke 1), jede höchstens 1× am Tag
+- **Erfüllung:** Jede tägliche Aufgabe wird mit dieser Wahrscheinlichkeit erledigt.
+  Jede „+“-Gewohnheit wird mit 60 % angetippt, jede „−“-Gewohnheit mit 30 %. Das sind etwa 3–4 Tipps am Tag, wie von dir geschätzt.
+- **Szenario „5 verpasst + 2× −“:** genau 5 zufällige Aufgaben fehlen pro Tag, dazu 2 verschiedene „−“-Gewohnheiten.
 - **Attributpunkte** werden optimal verteilt: immer das Attribut, das die Wand am weitesten nach hinten schiebt.
 - **Shop:**
   - Erst eine Holztruhe für jeden der 4 Plätze.
   - Dann wird je Platz auf eine Eisentruhe gespart, danach auf Goldtruhen.
-  - Das bessere Teil wird angelegt, das schlechtere für 25 % verkauft. Truhen von Bossen zählen mit.
+  - Das bessere Teil wird angelegt, das schlechtere für 25 % verkauft.
+  - Boss-Truhen werden sofort für den schwächsten Platz geöffnet.
 - **Kampf** nur, solange die App offen ist, 300 s pro Tag. Laufen, Sieg und Rückzug zählen mit.
-- **Auswertung:** Median aus 7 Durchläufen mit festen Seeds, jeder Lauf ist reproduzierbar.
+- **Auswertung:** Median über feste Seeds, jeder Lauf ist reproduzierbar.
+  Die Meilensteine unten stammen aus 101 Läufen je Erfüllung, die Verlaufstabelle aus 15.
 
 ## Formeln
 
+### Belohnungen und Vitalität
+
 | Was | Formel |
 |---|---|
-| Belohnung pro Punkt | 10 XP, 5 Gold |
-| XP bis zum nächsten Level | `min(1000, 50 × Level^1,5)`. Werte: 50, 141, 260, 400, 559, 735, 926, ab Level 8 immer 1000 |
-| Held: Lebenspunkte | `100 + 15 × Leben` |
-| Held: Schaden | `10 + 3 × Stärke`, −25 % wenn erschöpft |
-| Held: Angriffsintervall | `1,2 s / (1 + 0,06 × Tempo)`, mindestens 0,25 s |
-| Held: Krit | 10 % + Krit-Chance der Ausrüstung (höchstens 60 %), ×1,5 Schaden |
-| Gegner-Grundwerte (Straße 1) | 56 LP, 6 Schaden, Angriff alle 1,5 s (je nach Gegnertyp ×0,8–1,5) |
-| Gegner-Skalierung | Gebietsfaktor × `(1 + 0,07 × (Stufe − 1))` |
-| Gebietsfaktor | LP `1,44^a`, Schaden `1,12^a`. `a` = Gebiet über alle Runden (Straße R1 = 0 … Vulkan R1 = 7, Straße R2 = 8) |
-| Zwischenboss (Stufe 10/20) | ×3 LP, ×1,5 Schaden |
-| Gebietsboss (Stufe 25) | ×2,5 LP, ×1,5 Schaden. Durch die höhere Stufe hat er etwa so viele LP wie Boss 20, trifft aber 15 % härter |
+| Tägliche Aufgabe | Alle Aufgaben zusammen: **200 XP und 100 Gold**, gleich verteilt. 13 Aufgaben → je **15 XP, 8 Gold**. Keine Vitalität |
+| Gewohnheit „+“ (1× am Tag) | Alle „+“ zusammen: 25 % des Tagesbudgets (50 XP, 25 Gold), gleich verteilt. 4 Gewohnheiten → je 13 XP, 6 Gold, dazu **+2 Vitalität** |
+| Gewohnheit „−“ (1× am Tag) | −3 Vitalität und −5 Gold je Stärke, kein XP-Verlust |
+| Tagesquote → Vitalität | erledigt ÷ alle Aufgaben (nach Anzahl). **Unter 60 %:** linear −30 (0 %) bis −1. **60–70 %:** ±0. **Über 70 %:** linear bis +15 (100 %) |
+| Perfekter Tag (100 %) | zusätzlich **30 Gold** (30 % des Tagesgolds) |
+| XP bis zum nächsten Level | `min(520, 80 × Level^0,9)`. Werte: 80, 149, 215, 279, 341, 401, 461, ab Level 8 immer 520 |
+
+Bei 65 % (8–9 von 13 Aufgaben, dazu 3 Tipps) gibt es etwa **155 XP und 75 Gold** am Tag.
+
+| Erledigt (von 13) | Quote | Vitalität |
+|---|---|---|
+| 0 | 0 % | −30 |
+| 4 | 31 % | −15 |
+| 6 | 46 % | −7 |
+| 7 | 54 % | −3 |
+| 8–9 | 62–69 % | ±0 |
+| 11 | 85 % | +7 |
+| 12 | 92 % | +11 |
+| 13 | 100 % | +15 und 30 Gold |
+
+### Held
+
+| Was | Formel |
+|---|---|
+| Lebenspunkte | `100 + 15 × Leben` |
+| Schaden | `10 + 3 × Stärke`, −25 % wenn erschöpft |
+| Angriffsintervall | `1,2 s / (1 + 0,06 × Tempo)`, mindestens 0,25 s |
+| Krit | 10 % + Krit-Chance der Ausrüstung (höchstens 60 %), ×1,5 Schaden |
+
+### Gegner
+
+| Was | Formel |
+|---|---|
+| Lebenspunkte | `95 × Stärke × Typ` |
+| Schaden | `13,7 × √Stärke × Typ` (vorher kaum spürbar, jetzt zählt Leben) |
+| Angriff | alle `1 s × Typ` |
+| Stärke | je Gebiet vier Ankerpunkte (Tabelle unten), dazwischen gleichmäßiges Wachstum |
+| Position | normale Gegner: Stufe − 1. **Boss = Gegner 3 Stufen weiter**, **Gebietsboss = 4,5 Stufen weiter** |
+| Runde 2, 3 … | beginnt so stark, wie der Drache war |
 | Timer | **immer 10 s**, auch bei Bossen |
 
-### Boss-Belohnungen (neu in v0.4.1)
+Durch den Abstand zum Boss sind die Gegner davor etwas leichter, der Boss hält auf, und die 2–3 Gegner direkt danach
+sind leicht (der Held hat dann die Boss-Truhe). `bend` formt den Abschnitt zwischen Boss 10 und Boss 20
+(unter 1: kurz nach Boss 10 schon stark, über 1: erst spät). `startBend` macht den Anfang der Straße weich:
+Stufe 1 schafft auch ein neuer Held ohne Punkte, danach steigt es schnell.
+
+| Gebiet | Stufe 1 | Boss 10 | Boss 20 | Gebietsboss | bend | LP (Typ „ausgewogen“) |
+|---|---|---|---|---|---|---|
+| Straße | 0,7 | 1,58 | 3,03 | 3,24 | 0,57 (start 0,45) | 67 → 308 |
+| Wald | 2,96 | 4,07 | 4,69 | 5,49 | 0,72 | 281 → 522 |
+| Dunkler Wald | 5,15 | 6,28 | 7,51 | 8,39 | 1,29 | 489 → 797 |
+| Sumpf | 7,67 | 9,55 | 10,9 | 12,4 | 0,56 | 729 → 1178 |
+| Wüste | 11,8 | 14 | 15,7 | 17,4 | 0,54 | 1121 → 1653 |
+| Strand | 16,4 | 19 | 22,1 | 24,8 | 1,22 | 1558 → 2356 |
+| Schnee | 23,1 | 28,5 | 32,6 | 36 | 1,19 | 2195 → 3420 |
+| Vulkan | 33,7 | 39,7 | 44,5 | 48,9 | 1,6 | 3202 → 4646 (Drache) |
+
+Die Ankerpunkte sind mit der Simulation so gesetzt, dass ein Held mit 65 % Erfüllung jeden Boss zur geplanten Zeit schafft
+(Gebietsbosse etwa an Tag 13, 32, 49, 70, 92, 119, 145, 171).
+
+**Gegnertypen** sind seit v0.5 etwa **gleich schwer**. Vorher war ein einzelner „Panzer“ eine Wand von mehreren Tagen.
+Sie unterscheiden sich im Rhythmus und darin, was sie prüfen:
+
+| Typ | LP | Schaden | Angriffsintervall | prüft vor allem |
+|---|---|---|---|---|
+| ausgewogen | ×1 | ×1 | ×1 | – |
+| flink | ×1 | ×0,64 | ×0,65 | – (viele kleine Treffer) |
+| Rohling | ×0,98 | ×1,36 | ×1,4 | Leben (wenige harte Treffer) |
+| Panzer | ×1 | ×1,2 | ×1,3 | Stärke und Tempo |
+| Magier | ×1 | ×1,19 | ×1,25 | Leben |
+
+### Boss-Belohnungen
 
 Belohnung gibt es nur beim **ersten** Sieg über einen Boss. Nach einem Tod lassen sich dieselben Bosse also nicht erneut abgrasen.
+Seit v0.5 bringt **jeder** Boss eine Truhe. Den Platz wählst du beim Öffnen; bis dahin wartet sie im Shop unter „Boss-Beute“.
 
-| Boss | Gold (Straße) | pro Gebiet | Truhe |
+| Gebiet | Zwischenboss 10/20 | Gebietsboss 25 | Gold Zwischenboss / Gebietsboss |
 |---|---|---|---|
-| Zwischenboss Stufe 10/20 | 60 | ×1,3 | 15 % Holztruhe |
-| Gebietsboss Stufe 25 | 150 | ×1,3 | 35 % Eisentruhe |
-| Drache (Vulkan 25) | 150 × 1,3⁷ ≈ 941 | – | **immer** Goldtruhe |
+| Straße | Holz | Holz | 60 / 150 |
+| Wald | Holz | Eisen | 78 / 195 |
+| Dunkler Wald | Eisen | **Gold** | 101 / 254 |
+| Sumpf | Eisen | Gold | 132 / 330 |
+| Wüste | Eisen | Gold | 171 / 428 |
+| Strand | Gold | Gold | 223 / 557 |
+| Schnee | Gold | Gold | 290 / 724 |
+| Vulkan | Gold | **Drachenschatz** | 377 / 941 |
+
+Gold wächst ×1,3 je Gebiet (auch über Runden hinweg). Der **Drachenschatz** sind 4 legendäre Teile, je Platz eins,
+jeweils mit dem bestmöglichen Wurf für dein Level. Danach ist das Spiel im Grunde durchgespielt (Runde 2 geht weiter).
+Die erste Goldtruhe kommt so vom Gebietsboss des Dunklen Walds (65 %: etwa Tag 49), nicht erst beim Drachen.
 
 ### Truhen und Ausrüstung
 
-| Truhe | Preis (vorher) | Gewöhnlich / Ungewöhnlich / Selten / Episch / Legendär |
+| Truhe | Preis | Gewöhnlich / Ungewöhnlich / Selten / Episch / Legendär |
 |---|---|---|
-| Holz | **250** (100) | 70 / 25 / 5 / 0 / 0 % |
-| Eisen | **1000** (400) | 35 / 40 / 20 / 4,5 / 0,5 % |
-| Gold | **3750** (1500) | 10 / 35 / 40 / 13 / 2 % |
+| Holz | 250 | 70 / 25 / 5 / 0 / 0 % |
+| Eisen | 1000 | 35 / 40 / 20 / 4,5 / 0,5 % |
+| Gold | 3750 | 10 / 35 / 40 / 13 / 2 % |
 
 **Wert eines Teils:**
 
@@ -73,8 +141,9 @@ Belohnung gibt es nur beim **ersten** Sieg über einen Boss. Nach einem Tod lass
 Budget = (1,5 + 0,12 × Level) × Seltenheit × (1 ± 0,15)
 ```
 
-- Seltenheitsfaktor: 1 / 1,5 / 2,2 / 3,2 / 5.
-- Episch und Legendär bekommen zusätzlich **+50 %**.
+- Seltenheitsfaktor seit v0.5: **1 / 1,35 / 1,8 / 2,4 / 3,2** (vorher 1 / 1,5 / 2,2 / 3,2 / 5).
+- Episch und Legendär bekommen zusätzlich **+15 %** (vorher +50 %).
+- Grund: Mit den alten Faktoren entschied Glück bei der Truhe über Wochen Fortschritt; zwei Spieler mit gleicher Erfüllung lagen ganze Gebiete auseinander.
 
 Das Budget wird nach Platz verteilt:
 
@@ -87,131 +156,131 @@ Das Budget wird nach Platz verteilt:
 
 „Gesamtwert“ (Vergleich, Sortierung, Simulation) = Stärke + Tempo + Leben + Krit ÷ 2.
 
-Gegenstände von vor v0.4.1 werden beim Update auf diese Regeln umgerechnet. Der Gesamtwert bleibt dabei gleich (Schema v4).
+## Änderungen in v0.5
 
-### Level-Tempo mit deinem Profil (350 XP pro perfektem Tag)
+| Wert | v0.4.1 | v0.5 | Grund |
+|---|---|---|---|
+| Belohnung tägliche Aufgabe | Punkte × 10 XP / × 5 Gold, + Vitalität | Tagesbudget 200 XP / 100 Gold, gleich verteilt | „alle Aufgaben gleich viel Wert“ |
+| Gewohnheiten | beliebig oft, Punkte × 10 / × 5 | 1× am Tag; „+“ kleiner Bonus (25 % des Budgets) + 2 Vitalität | Feedback: nur einmal am Tag |
+| Vitalität | Heilung je Aufgabe, Strafe Punkte × 1,5 | nur noch über die Tagesquote | Feedback: Quote nach Aufgaben, unter 60 % immer Verlust |
+| Perfekter Tag | – | +30 % Tagesgold | Feedback |
+| XP-Kurve | `min(1000, 50 × L^1,5)` | `min(520, 80 × L^0,9)` | anfangs fast täglich ein Level, ab Level 8 alle 3–4 Tage |
+| Boss-Truhen | 15 % Holz / 35 % Eisen / Drache Goldtruhe | immer, Platz selbst wählen, Gold ab Gebiet 3 | Feedback: Goldtruhe deutlich früher |
+| Drache | Goldtruhe | 4 beste Teile | Feedback |
+| Gegner-Stärke | 56 LP × 1,07 je Stufe × 1,44 je Gebiet | Ankerpunkte je Gebiet | Tempo-Ziele je Boss |
+| Gegner-Schaden | 6, ×1,12 je Gebiet, alle 1,5 s | 13,7 × √Stärke, alle 1 s | Leben war nutzlos |
+| Bosse | ×3 / ×2,5 LP, ×1,5 Schaden | wie ein Gegner 3 / 4,5 Stufen weiter | Bosse halten auf, danach leichte Gegner |
+| Gegnertypen | sehr unterschiedlich stark | gleich schwer | sonst mehrtägige Wände mitten im Gebiet |
+| Seltenheit | 1 / 1,5 / 2,2 / 3,2 / 5, +50 % | 1 / 1,35 / 1,8 / 2,4 / 3,2, +15 % | weniger Zufall im Fortschritt |
+| Simulation | 15 Aufgaben + 10 Gewohnheiten | 13 Aufgaben + 4/3 Gewohnheiten | dein Backup |
 
-| Phase | Level-Ups |
-|---|---|
-| Erster Tag | Level 3 |
-| Tag 3 | Level 5 |
-| Ab Level 8 (etwa Tag 9) | gleichmäßig alle **3 Tage** (1000 XP) |
+## Ergebnis: Meilensteine (Median aus 101 Läufen)
 
-Ein Tod kostet ein Level, also etwa 3 Tage Arbeit.
+„erreicht → besiegt“ = Tag, an dem der Held vor dem Boss steht, und Tag des ersten Siegs.
 
-## Änderungen
-
-| Wert | SPEC-Start | v0.4.0 | Jetzt (v0.4.1) | Grund |
+| Meilenstein | 65 % | 80 % | 90 % | 100 % |
 |---|---|---|---|---|
-| XP-Kurve | `100 × L^1,2` | `50 × L^1,5`, max. 1000 | unverändert | Level 3 am ersten Tag (Feedback A3) |
-| Boss-Timer | 15 s / 20 s | 10 s | 10 s | Feedback C3 |
-| Boss-LP | ×3 / ×5 | ×2 / ×3 | **×3 / ×2,5** | Feedback Phase 4: erster Boss nach 3–4 Tagen, zweiter 4–5 Tage später |
-| Gegner pro Stufe | +4 % | +4 % | **+7 %** | Die Wand liegt wieder vor dem Zwischenboss, nicht schon bei Stufe 3–4 des nächsten Abschnitts |
-| Gegner je Gebiet | – | ×1,36 LP / ×1,12 Schaden | **×1,44 LP** / ×1,12 Schaden | Dein Profil bringt 60 % mehr XP und Gold als die Startaufgaben. Ohne Ausgleich wäre der Drache nach 3 Monaten fällig |
-| Truhenpreise | 100 / 400 / 1500 | 100 / 400 / 1500 | **250 / 1000 / 3750** | 2–3 Truhen bis zum ersten Boss, 3–4 weitere bis zum zweiten (Feedback Phase 4) |
-| Boss-Gold, Boss-Truhen | – | – | **neu** | Feedback Phase 4 |
-| Item-Werte | frei verteilt | je Platz mit Bonus | **feste Werte je Platz** | Feedback Phase 4: Waffe Stärke (+ Tempo), Helm Tempo, Rüstung Leben, Schild Leben + Krit |
-| Gegner-Grund-LP | 45 | 56 | 56 | iPhone-Test Phase 2 |
-| Strafe verpasste Aufgabe | Punkte × 3 | Punkte × 1,5 | Punkte × 1,5 | Feedback I1 (siehe Szenario) |
+| Tag 1 / Tag 2 | Stufe 5 / 6 | 5 / 6 | 5 / 7 | 5 / 10 |
+| Boss Stufe 10 | Tag 4 → 5 | 3 → 4 | 3 → 4 | 2 → 4 |
+| Boss Stufe 20 | 8 → 10 | 7 → 9 | 6 → 8 | 5 → 7 |
+| Straße geschafft | 11 → 13 | 10 → 11 | 9 → 10 | 9 → 9 |
+| Wald geschafft | 28 → 32 | 23 → 28 | 22 → 25 | 19 → 22 |
+| Dunkler Wald geschafft | 46 → 49 | 39 → 42 | 36 → 38 | 33 → 34 |
+| Sumpf geschafft | 65 → 70 | 55 → 59 | 50 → 53 | 45 → 50 |
+| Wüste geschafft | 90 → 92 | 75 → 76 | 68 → 70 | 64 → 66 |
+| Strand geschafft | 113 → 119 | 95 → 99 | 86 → 88 | 78 → 82 |
+| Schnee geschafft | 142 → 145 | 115 → 121 | 104 → 107 | 94 → 98 |
+| **Drache** | **163 → 171** (5,6 Monate) | 140 → 147 | **122 → 127** (4,2 Monate) | 111 → 118 |
 
-## Ergebnis: Meilensteine mit deinem Profil (Median aus 7 Läufen)
+„Stufe 5“ an Tag 1 heißt: der Held steht vor Stufe 5, Stufe 1–4 sind besiegt.
 
-„Tag“ = Tag des ersten Siegs über diesen Boss. „Truhen“ = gekaufte und von Bossen erhaltene Truhen bis dahin.
+**Level (65 %):** Tag 1 Level 2 · Tag 7 Level 6 · Tag 14 Level 8 · Tag 30 Level 13 · Tag 60 Level 22 · Tag 100 Level 34 · Tag 182 Level 59.
+Ab Level 8 kommt bei 65 % etwa alle 3,5 Tage ein Level.
 
-| Meilenstein | 100 % | 90 % | 80 % | 50 % |
-|---|---|---|---|---|
-| Boss Stufe 10 | Tag 3 (Level 5, 2 Truhen) | Tag 3 (L5, 2) | Tag 4 (L5, 2) | Tag 6 (L5, 2) |
-| Boss Stufe 20 | Tag 9 (L8, 4) | Tag 7 (L7, 4) | Tag 8 (L7, 4) | Tag 14 (L7, 5) |
-| Straße geschafft | Tag 12 (L9, 5) | Tag 12 (L8, 5) | Tag 12 (L8, 4) | Tag 18 (L8, 5) |
-| Wald geschafft | Tag 21 (L12, 8) | Tag 25 (L12, 8) | Tag 33 (L13, 9) | Tag 43 (L11, 9) |
-| Dunkler Wald geschafft | Tag 52 (L23, 12) | Tag 54 (L22, 11) | Tag 66 (L23, 12) | Tag 146 (L22, 18) |
-| Sumpf geschafft | Tag 60 (L25, 12) | Tag 63 (L25, 12) | Tag 71 (L24, 12) | Tag 160 (L26, 20) |
-| Wüste geschafft | Tag 91 (L36, 15) | Tag 98 (L35, 14) | Tag 107 (L34, 14) | nur 2 von 7 Läufen |
-| Strand geschafft | Tag 100 (L39, 16) | Tag 117 (L41, 16) | Tag 123 (L39, 16) | 1 von 7 |
-| Schnee geschafft | Tag 130 (L50, 19) | Tag 168 (L57, 20) | Tag 174 (L53, 20) | – |
-| **Drache** | **Tag 170** (L64, 23) | **Tag 203** (L68, 23) | **Tag 188** (L57, 22), 5 von 7 Läufen | – |
+**Truhen (65 %, gekauft + Boss):** 2 bis Boss 10, 5 bis Boss 20, 6 nach der Straße, 11 nach dem Wald, etwa 38 bis zum Drachen.
 
-Wunsch aus dem Feedback: erster Zwischenboss nach 3–4 Tagen mit 2–3 Truhen, der nächste 4–5 Tage später mit 3–4 weiteren Truhen.
-Ergebnis bei 90–100 %: Boss 10 an **Tag 3** mit 2 Truhen, Boss 20 an **Tag 7–9** mit 4 Truhen. Danach folgen etwa 2 Truhen pro Gebiet bzw. eine alle 7–10 Tage.
-Ein neuer Held schafft nur Stufe 1–9, für Boss 10 braucht er etwa Level 5 und die ersten Holztruhen (Unit-Tests).
+**Aufenthalt pro Spieler (65 %, Median je Gebiet):**
 
-### Verlauf (Auszug, `npm run simulate`)
-
-| Erfüllung | Tag | Level | Höchste Stufe | Tode | Truhen | Attribute S/T/L | Ausrüstung | Drache |
+| | Straße | Wald | Dunkler Wald | Sumpf | Wüste | Strand | Schnee | Vulkan |
 |---|---|---|---|---|---|---|---|---|
-| 100 % | 7 | 7 | Straße 20 | 0 | 4 | 6/0/0 | 11 | – |
-| 100 % | 30 | 15 | Dunkler Wald 20 | 0 | 10 | 11/0/2 | 22 | – |
-| 100 % | 90 | 36 | Wüste 25 | 0 | 15 | 22/4/9 | 50 | – |
-| 100 % | 180 | 67 | R2 Wald 20 | 0 | 26 | 36/17/13 | 179 | Tag 170 (7/7) |
-| 80 % | 7 | 6 | Straße 20 | 0 | 4 | 5/0/0 | 11 | – |
-| 80 % | 30 | 13 | Wald 20 | 0 | 9 | 9/0/3 | 18 | – |
-| 80 % | 90 | 30 | Wüste 25 | 0 | 14 | 18/3/8 | 40 | – |
-| 80 % | 180 | 55 | Vulkan 20 | 0 | 22 | 29/10/14 | 113 | Tag 161 (2/7) |
-| 50 % | 30 | 9 | Wald 20 | 1 | 7 | 7/0/1 | 17 | – |
-| 50 % | 90 | 15 | Dunkler Wald 20 | 3 | 14 | 10/0/3 | 21 | – |
-| 50 % | 180 | 27 | Wüste 10 | 6 | 21 | 15/2/7 | 26 | – |
+| Boss 10 | 1 | 3 | 2 | 2 | 2 | 1 | 1 | 1 |
+| Boss 20 | 3 | 1 | 2 | 1 | 1 | 4 | 1 | 1 |
+| Gebietsboss | 1 | 4 | 2 | 5 | 2 | 3 | 2 | 2 |
+| längste Wand (normaler Gegner) | 2 | 3 | 3 | 3 | 4 | 3 | 4 | 4 |
+
+### Verlauf (Auszug, `npm run simulate`, 15 Läufe)
+
+| Erfüllung | Tag | Level | Höchste Stufe | Tode | Truhen | Attribute S/T/L | Ausrüstung | Erschöpft-Tage |
+|---|---|---|---|---|---|---|---|---|
+| 100 % | 30 | 17 | Dunkler Wald 20 | 0 | 15 | 9/1/5 | 22 | 0 |
+| 100 % | 90 | 43 | Schnee 20 | 0 | 32 | 26/4/12 | 69 | 0 |
+| 90 % | 30 | 16 | Dunkler Wald 12 | 0 | 13 | 9/1/4 | 21 | 0 |
+| 90 % | 90 | 40 | Schnee 8 | 0 | 28 | 24/4/10 | 59 | 0 |
+| 65 % | 7 | 6 | Straße 19 | 0 | 3 | 4/0/0 | 7 | 0 |
+| 65 % | 30 | 13 | Wald 25 | 0 | 10 | 7/1/4 | 18 | 0 |
+| 65 % | 90 | 31 | Strand 5 | 0 | 24 | 18/3/8 | 45 | 0 |
+| 65 % | 180 | 58 | R2 Straße 19 | 0 | 41 | 37/5/16 | 168 | 0 |
+| 50 % | 30 | 10 | Wald 10 | 1 | 8 | 6/0/2 | 13 | 5 |
+| 50 % | 90 | 22 | Sumpf 10 | 3 | 18 | 12/1/7 | 24 | 18 |
+| 50 % | 180 | 40 | Strand 20 | 6 | 31 | 22/5/10 | 49 | 41 |
+| 30 % (schlechte Phase) | 30 | 6 | Straße 17 | 3 | 4 | 4/0/1 | 4 | 8 |
+| 30 % (schlechte Phase) | 180 | 8 | Straße 19 | 22 | 20 | 5/0/2 | 3 | 47 |
+| 5 verpasst + 2× „−“ | 90 | 28 | Wüste 11 | 1 | 21 | 17/3/8 | 38 | 21 |
+| 5 verpasst + 2× „−“ | 180 | 53 | Vulkan 14 | 2 | 35 | 32/4/15 | 78 | 44 |
 
 „Höchste Stufe“ ist die weiteste Stufe, die erreicht wurde; der Gegner dort ist noch nicht besiegt.
-„Ausrüstung“ ist der Gesamtwert aller angelegten Teile.
+„Ausrüstung“ ist der Gesamtwert aller angelegten Teile (nach dem Drachen inklusive Drachenschatz).
 
-## Abgleich mit den Zielen
+## Abgleich mit den Zielen (65 %)
 
-| Ziel | Ergebnis | |
+| Ziel aus dem Feedback | Ergebnis | |
 |---|---|---|
-| Erster Zwischenboss nach 3–4 Tagen mit 2–3 Truhen (Feedback Phase 4) | Tag 3–4, 2 Truhen | ✅ (Unit-Test) |
-| Nächster Zwischenboss 4–5 Tage später mit 3–4 weiteren Truhen | 4–6 Tage später, 2 weitere Truhen (4 insgesamt) | ⚠️ eine Truhe weniger als gewünscht |
-| Drache nach etwa einem halben Jahr (gute Erfüllung) | 100 %: Tag 170, 90 %: Tag 203, 80 %: Tag 188 (5 von 7) | ✅ |
-| 50 %: regelmäßige Tode, kaum über Gebiet 2–3 hinaus | Sumpf (Gebiet 4) erst nach gut 5 Monaten, 6 Tode im halben Jahr | ⚠️ ein Gebiet weiter |
-| 5 verpasst + 2× „−“ pro Tag: etwa 8 Tode im halben Jahr (Feedback I1) | 9 Tode, Level 17, Dunkler Wald | ✅ (Unit-Test) |
-| Kein Kampf länger als 10 s | alle Timer 10 s (Unit-Test) | ✅ |
+| Tag 1 Stufe 3–4, Tag 2 Stufe 6–8 | Tag 1: Stufe 4 besiegt (steht vor 5), Tag 2: Stufe 6 | ✅ |
+| Neuer Held gewinnt den ersten Kampf | Stufe 1 ohne Punkte immer gewonnen, Stufe 2 braucht Level 2 | ✅ (Unit-Test) |
+| Boss 10 nach 3–4 Tagen erreicht, in 2–3 Tagen besiegt | erreicht Tag 4, besiegt Tag 5 | ⚠️ meist schon nach 1 Tag |
+| Danach 3–4 leichte Gegner, dann Wände von 1–2 Tagen | 2–3 leichte Gegner, längste Wand je Gebiet 2–4 Tage | ⚠️ Wände etwas länger |
+| Boss 20: 2–3 Tage | Straße 2 Tage (8 → 10), später 1–4 | ✅ im Schnitt |
+| Gebietsboss: 3–4 Tage | 1–5 Tage, im Schnitt 2,6 | ⚠️ etwas kürzer |
+| Spätere Gebiete dauern länger | Gebiet 1: 13 Tage, dann 19, 17, 21, 22, 27, 26, 26 | ✅ |
+| Drache nach etwa 6 Monaten | Tag ~171 (5,6 Monate) | ✅ |
+| 90 %: etwa 4 Monate, Bosse 1–2 Tage | Tag ~127, Bosse meist 1–2 Tage | ✅ |
+| Level-Ups anfangs fast täglich, ab Level 8 alle 3–4 Tage | Level 6 nach einer Woche, ab Level 8 alle ~3,5 Tage | ✅ |
+| Unter 60 % immer Vitalitätsverlust | −1 bis −30 je nach Quote | ✅ (Unit-Test) |
+| Goldtruhe deutlich früher als beim Drachen | erste Boss-Goldtruhe etwa Tag 49 | ✅ |
+| Kein Kampf länger als 10 s | alle Timer 10 s | ✅ (Unit-Test) |
 
-**Zur Truhenzahl beim zweiten Boss:** Für 3–4 weitere Truhen müssten Holztruhen wieder billiger werden.
-Das würde aber auch den ersten Boss beschleunigen (schon Tag 2). Ich habe deshalb 2 Truhen bis Boss 10 und 4 bis Boss 20 gewählt.
-Stellschraube: `items.chests.wood.price`.
+**Zu den Boss-Aufenthalten:** Ein Boss hält auf, solange der Held noch nicht stark genug ist. Ob das 1 oder 3 Tage sind, hängt davon ab,
+ob gerade ein Level-Up oder eine Truhe dazukommt. Längere Bosse bekommt man über `combat.bossStageBonus` (3) und `areaBossStageBonus` (4,5):
+Mit 1,5 / 2,5 lagen die Bosse meist bei 1 Tag und die längsten Wände bei 5–6 Tagen. Noch größere Abstände machen die Gegner vor dem Boss zu leicht.
 
-## Szenario: 5 Aufgaben verpasst + 2× Gewohnheit „−“ pro Tag (Startaufgaben)
+## Szenarien mit schlechten Tagen
 
-| Tag | Level | Höchste Stufe | Tode | Erschöpft-Tage |
-|---|---|---|---|---|
-| 30 | 7 | Wald 20 | 1 | 5 |
-| 90 | 11 | Wald 20 | 4 | 21 |
-| 180 | 17 | Dunkler Wald 20 | 9 | 42 |
-| 240 | 20 | Dunkler Wald 20 | 13 | 59 |
-
-**Rechnung pro Tag:** Die 5 verpassten Aufgaben sind im Schnitt 8,5 Punkte.
-
-| Posten | Vitalität pro Tag |
+| Szenario | Ergebnis |
 |---|---|
-| Heilung durch erledigte Aufgaben (13,5 Punkte × 1) | +13,5 |
-| Strafe für verpasste Aufgaben (8,5 Punkte × 1,5) | −12,75 |
-| Gewohnheit „−“ (2 × 1 Punkt × 3) | −6 |
-| **Summe** | **−5,25** → Tod etwa alle 3 Wochen |
+| 30 % Erfüllung (schlechte Phase) | −15 Vitalität am Tag, erster Tod nach etwa **7–8 Tagen**, danach etwa alle 8 Tage. Kommt nicht über die Straße hinaus |
+| 50 % | −3 bis −7 am Tag: 6 Tode im halben Jahr, Strand nach 6 Monaten |
+| 5 verpasst + 2× „−“ pro Tag | 8 von 13 = 62 % ist neutral, nur die „−“-Gewohnheiten kosten (−6, „+“ heilt etwa +5): **2 Tode** im halben Jahr |
+| 4 komplett verpasste Tage | −30 je Tag → Tod |
 
-Halbe Punkte werden pro Tag gerundet und auf die Aufgaben verteilt, die Vitalität bleibt also eine ganze Zahl.
-Beispiel: 3 verpasste 1-Punkt-Aufgaben kosten zusammen 4,5 → 5 Vitalität (2 + 1 + 2).
-
-Wie die Strafhöhe das Szenario verändert (Messung aus Phase 2, mit den Gegnerwerten von v0.2.1):
-
-| Strafe verpasste Aufgabe | Strafe Gewohnheit „−“ | Szenario: Tode | 50 %: Tode |
-|---|---|---|---|
-| 3 (SPEC-Start) | 3 | 32 | 41 |
-| 2 | 3 | 17 | 22 |
-| **1,5** (aktuell) | 3 | **9** | 12 |
-| 1,5 | 1,5 | 3 | 11 |
+Das alte Ziel „5 verpasst + 2× − ≈ 8 Tode im halben Jahr“ gilt mit der neuen Quote nicht mehr: 62 % liegt im neutralen Bereich, den du so gewählt hast.
+Wer das Szenario wieder härter möchte: `vitality.quota.neutralFrom` auf 0,65 setzen, dann kosten 8 von 13 Aufgaben −2 am Tag.
 
 ## Stellschrauben
 
 | Wenn … | dann in `balance.ts` … |
 |---|---|
-| der erste Boss zu früh oder zu spät fällt | `combat.bossHpMultiplier` (3) und `items.chests.wood.price` (250) |
-| alles zu schnell oder zu langsam geht | `enemies.areaHpGrowthExponential` (0,44). Das ist der stärkste Hebel für den Drachen-Tag |
-| die Wand in einem Gebiet zu früh oder zu spät kommt | `enemies.stageHpGrowth` / `stageDamageGrowth` (0,07) |
-| Gebietsbosse zu hart oder zu weich sind | `combat.areaBossHpMultiplier` (2,5) |
-| zu viele oder zu wenige Truhen kommen | `items.chests.*.price` und `bossRewards.*` (Gold, Truhen-Chancen) |
-| Ausrüstung zu viel oder zu wenig bringt | `items.basePoints` (1,5), `items.levelFactor` (0,12) und `items.highRarityBonus` (0,5) |
-| der Schild zu viel oder zu wenig Krit gibt | `items.shieldCritShare` (0,4), `items.critPercentPerPoint` (2) und `combat.maxCritChance` (0,6) |
-| Level-Ups zu oft oder zu selten kommen | `levels.xpMaxPerLevel` (1000), `xpBase` (50) und `xpExponent` (1,5) |
-| verpasste Aufgaben zu hart oder zu mild bestraft werden | `vitality.missedDailyLossPerPoint` (1,5) und `habitMinus.vitalityLossPerPoint` (3) |
+| ein bestimmter Boss zu früh oder zu spät fällt | den passenden Ankerpunkt in `enemies.areas` (`boss10`, `boss20`, `areaBoss`) |
+| ein ganzes Gebiet zu schnell oder zu langsam ist | alle Ankerpunkte dieses und der folgenden Gebiete zusammen |
+| Bosse zu kurz oder zu lang aufhalten | `combat.bossStageBonus` (3) und `areaBossStageBonus` (4,5) |
+| die Gegner nach Boss 10 zu früh oder zu spät hart werden | `bend` des Gebiets |
+| der Anfang zu leicht oder zu schwer ist | `enemies.areas[0].stage1` (0,7) und `startBend` (0,45) |
+| Leben zu viel oder zu wenig zählt | `enemies.baseDamage` (13,7) und `damageExponent` (0,5) |
+| Level-Ups zu oft oder zu selten kommen | `levels.xpMaxPerLevel` (520), `xpBase` (80) und `xpExponent` (0,9) |
+| zu viele oder zu wenige Truhen kommen | `items.chests.*.price` und `bossRewards.chests` / `goldBoss` / `goldAreaBoss` |
+| Truhenglück zu viel ausmacht | `items.rarityFactors` und `items.highRarityBonus` |
+| schlechte Tage zu hart oder zu mild sind | `vitality.quota` (`neutralFrom` 0,6, `neutralTo` 0,7, `lossAtZero` 30, `gainAtFull` 15) und `habitMinus.vitalityLossPerPoint` (3) |
+| der perfekte Tag mehr bringen soll | `vitality.perfectDayGoldShare` (0,3) |
 
 Nach jeder Änderung `npm run simulate` und `npm test` laufen lassen.
-`simulation.test.ts` prüft die Leitplanken: Tempo bis Boss 10 und Boss 20 sowie die Tode im Szenario.
+`simulation.test.ts` prüft die Leitplanken: Level in der ersten Woche, Tage bis Boss 10/20 und Gebietsboss,
+Tod in einer schlechten Phase und das Szenario „5 verpasst + 2× −“. `combat.test.ts` prüft Ankerpunkte, Bossabstand und den Spielstart.

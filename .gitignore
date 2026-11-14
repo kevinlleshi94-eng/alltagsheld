@@ -9,3 +9,6 @@ coverage
 assets-src/oga/*/x/
 # personal Claude Code settings
 .claude/settings.local.json
+
+# private save game of the user (never commit)
+Backup/

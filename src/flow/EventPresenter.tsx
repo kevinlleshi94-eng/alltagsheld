@@ -5,7 +5,7 @@ import { BALANCE } from '../game/balance';
 import { heroStats } from '../game/combat';
 import type { Attribute, DeathReport, Player } from '../game/types';
 import { formatStage } from '../game/world';
-import { ChestOpening } from '../shop/ChestOpening';
+import { BossChestDialog, DragonHoard } from '../shop/BossChest';
 import { useEquippedItems, usePlayer } from '../state/hooks';
 import { useStore } from '../state/store';
 import { eventQueue, flow, popEvent, type QueuedEvent } from '../state/ui';
@@ -53,18 +53,19 @@ export function EventPresenter() {
   if (next.event.type === 'death') return <DeathScreen report={next.event.report} onClose={() => popEvent(next.id)} />;
   if (next.event.type === 'levelUp' && player.level >= next.event.level)
     return <LevelUpPopup key={next.id} item={next} level={next.event.level} player={player} />;
-  if (next.event.type === 'chestDrop') {
-    const { chest, item, current } = next.event;
+  if (next.event.type === 'bossChest') {
     return (
-      <ChestOpening
+      <BossChestDialog
         key={next.id}
-        chest={chest}
-        outcome={{ item, current }}
+        pendingId={next.event.pendingId}
+        chest={next.event.chest}
         caption="Beute vom Boss!"
-        onDone={() => popEvent(next.id)}
+        onClose={() => popEvent(next.id)}
       />
     );
   }
+  if (next.event.type === 'dragonHoard')
+    return <DragonHoard key={next.id} items={next.event.items} onDone={() => popEvent(next.id)} />;
   return null;
 }
 
